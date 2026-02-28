@@ -1,0 +1,42 @@
+# ==========================================
+# Wall-E-Replica 项目专属 .gitignore
+# 工具链: ESP-IDF, 立创EDA, Fusion 360
+# ==========================================
+
+# 1. ESP-IDF 编译产物与缓存
+Firmware/build/
+Firmware/managed_components/
+Firmware/dependencies.lock
+*.bin
+*.elf
+*.map
+*.hex
+sdkconfig.old
+
+# 2. 立创EDA (EasyEDA) 自动备份与系统缓存
+Hardware/**/*.bak
+Hardware/**/*.lck
+Hardware/Recovery/
+Hardware/History/
+
+# 3. Fusion 360 本地缓存与备份
+Mechanical/**/*.f3d.bak
+Mechanical/**/*.f3d.tmp
+
+# 4. 操作系统缓存
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+Desktop.ini
+
+# 5. 编辑器与 IDE 配置文件 (VS Code 等)
+.vscode/
+.idea/
+
+# 6. 通用临时文件
+*.log
+*.tmp
+*.bak
+*.swp
+*~

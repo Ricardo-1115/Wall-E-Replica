@@ -1,0 +1,4 @@
+WALL-E (Tracks strong linkages) by ZDC on Thingiverse: https://www.thingiverse.com/thing:4932310
+
+Summary:
+I modified the tracks to be strong and use paperclip to connect them.The paperclip idea was from Eisbaeeer tracks that I originally used but they kept breaking on me were the paperclips went though there is not much plastic around them.https://www.thingiverse.com/thing:4069116I also redesigned the front as a gear to help keep the tracking alignment.These track are easy to print and require No support.Connecting the last track/tread &amp; Removing the paperclips can be difficult if you need to remove the tracks/tread.

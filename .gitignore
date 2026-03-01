@@ -40,3 +40,10 @@ Desktop.ini
 *.bak
 *.swp
 *~
+
+# 7. Microsoft Office 临时文件与锁定文件
+~$*.doc*
+~$*.xls*
+~$*.ppt*
+~*.tmp
+*.tmp

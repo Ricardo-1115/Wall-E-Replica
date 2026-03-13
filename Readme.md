@@ -33,7 +33,7 @@ WallE_Graduation/
 
 <p align="center">
   <img src="./05-Assets/painting_1.jpg" width="45%" />
-  <img src="./05-Assets/painting_2.jpg" width="45%" />
+  <img src="./05-Assets/painting_3.jpg" width="45%" />
 </p>
 
 ## 📜 引用与致谢 (Credits)

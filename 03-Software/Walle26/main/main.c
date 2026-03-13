@@ -16,10 +16,14 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "cmd_system.h"
-#include "cmd_wifi.h"
 #include "cmd_nvs.h"
 #include "led_strip.h"
 #include "DC_Motor.h"
+#include "PCA9685.h"
+#include "wifi.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
 
 
 /*
@@ -107,6 +111,17 @@ void app_main(void)
 {
 
     DC_Motor_Init();
+    motor_cmd_queue = xQueueCreate(1, sizeof(motor_cmd_t));
+    if (motor_cmd_queue == NULL) {
+        ESP_LOGE("MAIN", "队列创建失败！");
+        return;
+    }
+
+    // 3. 创建独立运行的电机控制任务 (优先级可以稍微高一点)
+    xTaskCreate(motor_control_task, "motor_ctrl_task", 4096, NULL, 5, NULL);
+    // pca9685_init();
+    // pca9685_set_freq(50);
+
 
     esp_console_repl_t *repl = NULL;
     esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
@@ -117,6 +132,7 @@ void app_main(void)
     repl_config.max_cmdline_length = CONFIG_CONSOLE_MAX_COMMAND_LINE_LENGTH;
 
     initialize_nvs();
+    wifi_init();
 
 #if CONFIG_CONSOLE_STORE_HISTORY
     initialize_filesystem();
@@ -135,15 +151,14 @@ void app_main(void)
 #if SOC_DEEP_SLEEP_SUPPORTED
     register_system_deep_sleep();
 #endif
-#if SOC_WIFI_SUPPORTED
-    register_wifi();
-#endif
     register_nvs();
 
     register_hello();
     register_echo();
     register_motor_set();
     register_motor_stop();
+    register_servo();
+
 
 #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
     esp_console_dev_uart_config_t hw_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
@@ -164,7 +179,9 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_console_start_repl(repl));
 
     configure_led();
-    
+    // pca9685_set_angle(0, 180.0f); 
+    // vTaskDelay(1000 / portTICK_PERIOD_MS); 
+    // pca9685_set_angle(0, 90.0f); 
     while(1) {
         blink_led();
     }

@@ -117,10 +117,10 @@ void app_main(void)
         return;
     }
 
-    // 3. 创建独立运行的电机控制任务 (优先级可以稍微高一点)
-    xTaskCreate(motor_control_task, "motor_ctrl_task", 4096, NULL, 5, NULL);
-    // pca9685_init();
-    // pca9685_set_freq(50);
+    // 3. 创建独立运行的电机控制任务
+    xTaskCreate(motor_control_task, "motor_ctrl_task", 4096, NULL, 15, NULL);
+    pca9685_init();
+    pca9685_set_freq(50);
 
 
     esp_console_repl_t *repl = NULL;
@@ -132,7 +132,7 @@ void app_main(void)
     repl_config.max_cmdline_length = CONFIG_CONSOLE_MAX_COMMAND_LINE_LENGTH;
 
     initialize_nvs();
-    wifi_init();
+    // wifi_init();
 
 #if CONFIG_CONSOLE_STORE_HISTORY
     initialize_filesystem();
@@ -158,6 +158,7 @@ void app_main(void)
     register_motor_set();
     register_motor_stop();
     register_servo();
+    register_servo_key();
 
 
 #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)

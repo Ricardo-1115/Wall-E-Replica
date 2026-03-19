@@ -18,8 +18,8 @@
 #define LED0_OFF_H      0x09
 #define PCA_Pre         0xFE        // 配置频率地址
 
-#define SERVO_MIN_TICK  126
-#define SERVO_MAX_TICK  521
+#define SERVO_MIN_TICK  135
+#define SERVO_MAX_TICK  519
 
 #ifdef __cplusplus
 extern "C"
@@ -33,6 +33,8 @@ extern "C"
 	void walle_move_servo(uint8_t channel, float target_angle, uint32_t duration_ms);
 
 	void register_servo(void);
+	void register_servo_key(void);
+
 
 #ifdef __cplusplus
 }

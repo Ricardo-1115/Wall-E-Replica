@@ -5,7 +5,7 @@
 #include <stdlib.h> 
 #include <stdbool.h>
 #include "esp_err.h"
-#include "esp_log.h"      // 【新增】修复 ESP_LOGI 找不到的问题
+#include "esp_log.h"      
 #include "driver/ledc.h"
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
@@ -14,13 +14,11 @@
 #include <sys/param.h>
 #include "cJSON.h"
 
-// 【修改】正确定义指令结构体类型，供所有包含此头文件的 C 文件使用
 typedef struct {
     int8_t left_speed;
     int8_t right_speed;
 } motor_cmd_t;
 
-// 【保留】声明全局队列和任务函数
 extern QueueHandle_t motor_cmd_queue; 
 extern void motor_control_task(void *pvParameters);
 
@@ -67,14 +65,11 @@ typedef struct {
 
 
 
-extern int8_t current_speed[2]; // 用于记录当前速度，供平滑过渡使用
 
 // 初始化后初次设置速度建议使用 DC_Motor_SetSpeedSmooth 来避免突然的速度跳变引起的堵转电流峰值。
 esp_err_t DC_Motor_Init(void);
 
-esp_err_t DC_Motor_SetSpeed(motor_id_t motor_id, int8_t speed);
 esp_err_t DC_Motor_Stop(uint32_t duration_ms);
-esp_err_t DC_Motor_SetSpeedSmooth(motor_id_t motor_id, int8_t target_speed, uint32_t duration_ms);
 esp_err_t DC_Motor_SetSpeedSmoothAsync(motor_id_t motor_id, int8_t target_speed, uint32_t duration_ms);
 
 

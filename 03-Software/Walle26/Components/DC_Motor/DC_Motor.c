@@ -75,7 +75,7 @@ static void motor_set_direction(motor_control_t *motor, int8_t speed)
 
 static IRAM_ATTR bool motor_fade_cb(const ledc_cb_param_t *param, void *user_arg)
 {
-    motor_control_t *motor = (motor_control_t *)user_arg;
+    motor_control_t *motor = (motor_control_t *)user_arg;  
 
     if (param->event != LEDC_FADE_END_EVT)
         return false; // 只处理淡入淡出结束事件
@@ -179,11 +179,63 @@ esp_err_t DC_Motor_SetSpeedSmoothAsync(motor_id_t motor_id, int8_t target_speed,
     return ESP_OK;
 }
 
+
 /*
- * 跟踪当前两个电机的目标速度，供平滑过渡使用。
- * 初始为 0（停止），仅由 DC_Motor_SetSpeed 修改。
+ * @brief Stop the DC motor by setting the PWM duty cycle to zero and putting the motor driver into standby mode.
+ * @param duration_ms The duration in milliseconds over which to fade the motor speed down to zero. If set to 0, the motor will stop immediately without fading.
+ * This function uses the LEDC fade API to smoothly reduce the motor speed to zero over the specified duration. After fading, it sets the standby pin low to put the motor driver into standby mode, which can help reduce power consumption and prevent unintended movement.
  */
-int8_t current_speed[2] = {0, 0};
+esp_err_t DC_Motor_Stop(uint32_t duration_ms)
+{
+    DC_Motor_SetSpeedSmoothAsync(MOTOR_LEFT, 0, duration_ms);
+    DC_Motor_SetSpeedSmoothAsync(MOTOR_RIGHT, 0, duration_ms);
+    
+    ESP_LOGI(__func__, "the speed before stopping: left motor %d, right motor %d", motors[MOTOR_LEFT].current_speed, motors[MOTOR_RIGHT].current_speed);
+
+    /* If fade API is available and duration is specified, use it to smoothly stop the motors */
+
+    return ESP_OK;
+}
+
+// 2. 声明全局队列句柄
+QueueHandle_t motor_cmd_queue = NULL;
+
+// 3. 定义心跳超时时间 (比如 500 毫秒没收到数据就刹车)
+#define HEARTBEAT_TIMEOUT_MS 500
+
+void motor_control_task(void *pvParameters) {
+    motor_cmd_t cmd;
+    bool is_disconnected = false; // 记录是否处于失控状态
+
+    ESP_LOGI("MOTOR_TASK", "电机控制任务已启动，等待链路指令...");
+
+    while (1) {
+        // 核心亮点：xQueueReceive 自带看门狗功能！
+        // 如果在 HEARTBEAT_TIMEOUT_MS 内收到了前端的数据，返回 pdPASS
+        // 如果超时没收到，返回 errQUEUE_EMPTY
+        if (xQueueReceive(motor_cmd_queue, &cmd, pdMS_TO_TICKS(HEARTBEAT_TIMEOUT_MS)) == pdPASS) {
+            
+            if (is_disconnected) {
+                ESP_LOGI("MOTOR_TASK", "链路恢复，解除锁定！");
+                is_disconnected = false;
+            }
+
+            // 执行异步平滑调速 (假设 100ms 的平滑渐变时间)
+            DC_Motor_SetSpeedSmoothAsync(MOTOR_LEFT, cmd.left_speed, 100);
+            DC_Motor_SetSpeedSmoothAsync(MOTOR_RIGHT, cmd.right_speed, 100);
+
+        } else {
+            // 看门狗咬人：超时未收到数据！
+            if (!is_disconnected) {
+                ESP_LOGW("MOTOR_TASK", "🚨 心跳超时！触发安全刹车！");
+                is_disconnected = true;
+                
+                // 触发紧急平滑停止 (比如 300ms 停稳)
+                DC_Motor_Stop(300); 
+            }
+        }
+    }
+}
 
 esp_err_t DC_Motor_Init(void)
 {
@@ -246,203 +298,163 @@ esp_err_t DC_Motor_Init(void)
     return ESP_OK;
 }
 
-/*
- * @brief Stop the DC motor by setting the PWM duty cycle to zero and putting the motor driver into standby mode.
- * @param duration_ms The duration in milliseconds over which to fade the motor speed down to zero. If set to 0, the motor will stop immediately without fading.
- * This function uses the LEDC fade API to smoothly reduce the motor speed to zero over the specified duration. After fading, it sets the standby pin low to put the motor driver into standby mode, which can help reduce power consumption and prevent unintended movement.
- */
-esp_err_t DC_Motor_Stop(uint32_t duration_ms)
-{
-    DC_Motor_SetSpeedSmoothAsync(MOTOR_LEFT, 0, duration_ms);
-    DC_Motor_SetSpeedSmoothAsync(MOTOR_RIGHT, 0, duration_ms);
 
-    /* If fade API is available and duration is specified, use it to smoothly stop the motors */
 
-    return ESP_OK;
-}
 
-/*
- * 平滑改变速度（blocking）。
- * - motor_id: 电机编号
- * - target_speed: -100..100
- * - duration_ms: 从当前速度到目标速度的总时长（毫秒）。
- *   若为 0，则直接设置目标速度。
- */
-esp_err_t DC_Motor_SetSpeedSmooth(motor_id_t motor_id, int8_t target_speed, uint32_t duration_ms)
-{
-    /* verify the motor id is valid */
-    if (motor_id != MOTOR_LEFT && motor_id != MOTOR_RIGHT)
-    {
-        return ESP_ERR_INVALID_ARG;
-    }
 
-    /* clamp requested speed into allowable range */
-    if (target_speed > MOTOR_SPEED_MAX)
-        target_speed = MOTOR_SPEED_MAX;
-    if (target_speed < MOTOR_SPEED_MIN)
-        target_speed = MOTOR_SPEED_MIN;
 
-    /* zero duration means no smoothing; just jump to target */
-    if (duration_ms == 0)
-    {
-        return DC_Motor_SetSpeed(motor_id, target_speed);
-    }
 
-    /* compute delta and number of one-unit steps required */
-    int8_t start = current_speed[motor_id];
-    int delta = (int)target_speed - (int)start;
-    int steps = abs(delta);
-    if (steps == 0)
-        return ESP_OK; // already at target
 
-    /* delay between each incremental change */
-    uint32_t step_delay = duration_ms / (uint32_t)steps;
-    int8_t step_dir = (delta > 0) ? 1 : -1; // direction up or down
+// /*
+//  * 跟踪当前两个电机的目标速度，供平滑过渡使用。
+//  * 初始为 0（停止），仅由 DC_Motor_SetSpeed 修改。
+//  */
+// int8_t current_speed[2] = {0, 0};
 
-    for (int i = 1; i <= steps; ++i)
-    {
-        int8_t s = start + (int8_t)(i * step_dir); // intermediate speed
-        esp_err_t err = DC_Motor_SetSpeed(motor_id, s);
-        if (err != ESP_OK)
-            return err;
-        vTaskDelay(pdMS_TO_TICKS(step_delay));
-    }
+// /*
+//  * 平滑改变速度（blocking）。
+//  * - motor_id: 电机编号
+//  * - target_speed: -100..100
+//  * - duration_ms: 从当前速度到目标速度的总时长（毫秒）。
+//  *   若为 0，则直接设置目标速度。
+//  */
+// esp_err_t DC_Motor_SetSpeedSmooth(motor_id_t motor_id, int8_t target_speed, uint32_t duration_ms)
+// {
+//     /* verify the motor id is valid */
+//     if (motor_id != MOTOR_LEFT && motor_id != MOTOR_RIGHT)
+//     {
+//         return ESP_ERR_INVALID_ARG;
+//     }
 
-    /* final call to ensure exact target (avoids rounding issues) */
-    return DC_Motor_SetSpeed(motor_id, target_speed);
-}
+//     /* clamp requested speed into allowable range */
+//     if (target_speed > MOTOR_SPEED_MAX)
+//         target_speed = MOTOR_SPEED_MAX;
+//     if (target_speed < MOTOR_SPEED_MIN)
+//         target_speed = MOTOR_SPEED_MIN;
 
-/*
- * @brief Set the speed of the DC motor by adjusting the PWM duty cycle and direction based on the input speed percentage.
- * @param speed An integer value in the range of -100 to 100, where negative values indicate reverse direction, positive values indicate forward direction, and zero indicates stop.
- * This function calculates the appropriate duty cycle based on the input speed percentage and updates the LEDC channel configuration to control the motor speed. It also sets the GPIO levels to control the direction of the motor.
- * Note: The function clamps the input speed to the range of -100 to 100 to prevent invalid duty cycle values.
- * The duty cycle is calculated as (speed * (2^duty_resolution)) / 100, where duty_resolution is defined by LEDC_DUTY_RES. For example, if the duty resolution is 13 bits, the maximum duty value is 8191 (2^13 - 1), and a speed of 50% would correspond to a duty value of approximately 4096.
- */
-esp_err_t DC_Motor_SetSpeed(motor_id_t motor_id, int8_t speed)
-{
-    /* clamp speed to allowable range; prevents PWM overflow */
-    if (speed > MOTOR_SPEED_MAX)
-    {
-        speed = MOTOR_SPEED_MAX;
-    }
-    else if (speed < MOTOR_SPEED_MIN)
-    {
-        speed = MOTOR_SPEED_MIN;
-    }
+//     /* zero duration means no smoothing; just jump to target */
+//     if (duration_ms == 0)
+//     {
+//         return DC_Motor_SetSpeed(motor_id, target_speed);
+//     }
 
-    /* set direction pins depending on sign of speed */
-    if (motor_id == MOTOR_LEFT)
-    {
-        if (speed > 0)
-        {
-            /* forward rotation */
-            gpio_set_level(DC_Motor_LEFT_GPIO_1, 1);
-            gpio_set_level(DC_Motor_LEFT_GPIO_2, 0);
-        }
-        else if (speed < 0)
-        {
-            /* reverse rotation */
-            gpio_set_level(DC_Motor_LEFT_GPIO_1, 0);
-            gpio_set_level(DC_Motor_LEFT_GPIO_2, 1);
-        }
-        else
-        {
-            /* zero speed; leave both direction pins low for safety */
-            gpio_set_level(DC_Motor_LEFT_GPIO_1, 0);
-            gpio_set_level(DC_Motor_LEFT_GPIO_2, 0);
-        }
+//     /* compute delta and number of one-unit steps required */
+//     int8_t start = current_speed[motor_id];
+//     int delta = (int)target_speed - (int)start;
+//     int steps = abs(delta);
+//     if (steps == 0)
+//         return ESP_OK; // already at target
 
-        /* compute duty cycle from speed percentage and update channel */
-        uint32_t duty = calculate_duty(speed);
-        esp_err_t err = ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, duty);
-        if (err != ESP_OK)
-            return err;
-        err = ledc_update_duty(LEDC_MODE, LEDC_CHANNEL);
-        if (err != ESP_OK)
-            return err;
-    }
-    else if (motor_id == MOTOR_RIGHT)
-    {
-        if (speed > 0)
-        {
-            gpio_set_level(DC_Motor_RIGHT_GPIO_1, 1);
-            gpio_set_level(DC_Motor_RIGHT_GPIO_2, 0);
-        }
-        else if (speed < 0)
-        {
-            gpio_set_level(DC_Motor_RIGHT_GPIO_1, 0);
-            gpio_set_level(DC_Motor_RIGHT_GPIO_2, 1);
-        }
-        else
-        {
-            gpio_set_level(DC_Motor_RIGHT_GPIO_1, 0);
-            gpio_set_level(DC_Motor_RIGHT_GPIO_2, 0);
-        }
+//     /* delay between each incremental change */
+//     uint32_t step_delay = duration_ms / (uint32_t)steps;
+//     int8_t step_dir = (delta > 0) ? 1 : -1; // direction up or down
 
-        uint32_t duty = calculate_duty(speed);
-        esp_err_t err = ledc_set_duty(LEDC_MODE, LEDC_CHANNEL + 1, duty);
-        if (err != ESP_OK)
-            return err;
-        err = ledc_update_duty(LEDC_MODE, LEDC_CHANNEL + 1);
-        if (err != ESP_OK)
-            return err;
-    }
-    else
-    {
-        /* invalid motor id */
-        return ESP_ERR_INVALID_ARG;
-    }
+//     for (int i = 1; i <= steps; ++i)
+//     {
+//         int8_t s = start + (int8_t)(i * step_dir); // intermediate speed
+//         esp_err_t err = DC_Motor_SetSpeed(motor_id, s);
+//         if (err != ESP_OK)
+//             return err;
+//         vTaskDelay(pdMS_TO_TICKS(step_delay));
+//     }
 
-    /* store the new speed for future smoothing calls */
-    if (motor_id == MOTOR_LEFT)
-    {
-        current_speed[MOTOR_LEFT] = speed;
-    }
-    else
-    {
-        current_speed[MOTOR_RIGHT] = speed;
-    }
+//     /* final call to ensure exact target (avoids rounding issues) */
+//     return DC_Motor_SetSpeed(motor_id, target_speed);
+// }
 
-    return ESP_OK;
-}
+// /*
+//  * @brief Set the speed of the DC motor by adjusting the PWM duty cycle and direction based on the input speed percentage.
+//  * @param speed An integer value in the range of -100 to 100, where negative values indicate reverse direction, positive values indicate forward direction, and zero indicates stop.
+//  * This function calculates the appropriate duty cycle based on the input speed percentage and updates the LEDC channel configuration to control the motor speed. It also sets the GPIO levels to control the direction of the motor.
+//  * Note: The function clamps the input speed to the range of -100 to 100 to prevent invalid duty cycle values.
+//  * The duty cycle is calculated as (speed * (2^duty_resolution)) / 100, where duty_resolution is defined by LEDC_DUTY_RES. For example, if the duty resolution is 13 bits, the maximum duty value is 8191 (2^13 - 1), and a speed of 50% would correspond to a duty value of approximately 4096.
+//  */
+// esp_err_t DC_Motor_SetSpeed(motor_id_t motor_id, int8_t speed)
+// {
+//     /* clamp speed to allowable range; prevents PWM overflow */
+//     if (speed > MOTOR_SPEED_MAX)
+//     {
+//         speed = MOTOR_SPEED_MAX;
+//     }
+//     else if (speed < MOTOR_SPEED_MIN)
+//     {
+//         speed = MOTOR_SPEED_MIN;
+//     }
 
-// 2. 声明全局队列句柄
-QueueHandle_t motor_cmd_queue = NULL;
+//     /* set direction pins depending on sign of speed */
+//     if (motor_id == MOTOR_LEFT)
+//     {
+//         if (speed > 0)
+//         {
+//             /* forward rotation */
+//             gpio_set_level(DC_Motor_LEFT_GPIO_1, 1);
+//             gpio_set_level(DC_Motor_LEFT_GPIO_2, 0);
+//         }
+//         else if (speed < 0)
+//         {
+//             /* reverse rotation */
+//             gpio_set_level(DC_Motor_LEFT_GPIO_1, 0);
+//             gpio_set_level(DC_Motor_LEFT_GPIO_2, 1);
+//         }
+//         else
+//         {
+//             /* zero speed; leave both direction pins low for safety */
+//             gpio_set_level(DC_Motor_LEFT_GPIO_1, 0);
+//             gpio_set_level(DC_Motor_LEFT_GPIO_2, 0);
+//         }
 
-// 3. 定义心跳超时时间 (比如 500 毫秒没收到数据就刹车)
-#define HEARTBEAT_TIMEOUT_MS 500
+//         /* compute duty cycle from speed percentage and update channel */
+//         uint32_t duty = calculate_duty(speed);
+//         esp_err_t err = ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, duty);
+//         if (err != ESP_OK)
+//             return err;
+//         err = ledc_update_duty(LEDC_MODE, LEDC_CHANNEL);
+//         if (err != ESP_OK)
+//             return err;
+//     }
+//     else if (motor_id == MOTOR_RIGHT)
+//     {
+//         if (speed > 0)
+//         {
+//             gpio_set_level(DC_Motor_RIGHT_GPIO_1, 1);
+//             gpio_set_level(DC_Motor_RIGHT_GPIO_2, 0);
+//         }
+//         else if (speed < 0)
+//         {
+//             gpio_set_level(DC_Motor_RIGHT_GPIO_1, 0);
+//             gpio_set_level(DC_Motor_RIGHT_GPIO_2, 1);
+//         }
+//         else
+//         {
+//             gpio_set_level(DC_Motor_RIGHT_GPIO_1, 0);
+//             gpio_set_level(DC_Motor_RIGHT_GPIO_2, 0);
+//         }
 
-void motor_control_task(void *pvParameters) {
-    motor_cmd_t cmd;
-    bool is_disconnected = false; // 记录是否处于失控状态
+//         uint32_t duty = calculate_duty(speed);
+//         esp_err_t err = ledc_set_duty(LEDC_MODE, LEDC_CHANNEL + 1, duty);
+//         if (err != ESP_OK)
+//             return err;
+//         err = ledc_update_duty(LEDC_MODE, LEDC_CHANNEL + 1);
+//         if (err != ESP_OK)
+//             return err;
+//     }
+//     else
+//     {
+//         /* invalid motor id */
+//         return ESP_ERR_INVALID_ARG;
+//     }
 
-    ESP_LOGI("MOTOR_TASK", "电机控制任务已启动，等待链路指令...");
+//     /* store the new speed for future smoothing calls */
+//     if (motor_id == MOTOR_LEFT)
+//     {
+//         current_speed[MOTOR_LEFT] = speed;
+//     }
+//     else
+//     {
+//         current_speed[MOTOR_RIGHT] = speed;
+//     }
 
-    while (1) {
-        // 核心亮点：xQueueReceive 自带看门狗功能！
-        // 如果在 HEARTBEAT_TIMEOUT_MS 内收到了前端的数据，返回 pdPASS
-        // 如果超时没收到，返回 errQUEUE_EMPTY
-        if (xQueueReceive(motor_cmd_queue, &cmd, pdMS_TO_TICKS(HEARTBEAT_TIMEOUT_MS)) == pdPASS) {
-            
-            if (is_disconnected) {
-                ESP_LOGI("MOTOR_TASK", "链路恢复，解除锁定！");
-                is_disconnected = false;
-            }
+//     return ESP_OK;
+// }
 
-            // 执行异步平滑调速 (假设 100ms 的平滑渐变时间)
-            DC_Motor_SetSpeedSmoothAsync(MOTOR_LEFT, cmd.left_speed, 100);
-            DC_Motor_SetSpeedSmoothAsync(MOTOR_RIGHT, cmd.right_speed, 100);
 
-        } else {
-            // 看门狗咬人：超时未收到数据！
-            if (!is_disconnected) {
-                ESP_LOGW("MOTOR_TASK", "🚨 心跳超时！触发安全刹车！");
-                is_disconnected = true;
-                
-                // 触发紧急平滑停止 (比如 300ms 停稳)
-                DC_Motor_Stop(300); 
-            }
-        }
-    }
-}

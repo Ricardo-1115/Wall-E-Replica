@@ -186,7 +186,6 @@ void register_motor_set(void){
 
 static struct {
     struct arg_int *duration_ms;
-    struct arg_lit *info;
     struct arg_end *end;
 }motor_stop_args;
 
@@ -200,11 +199,7 @@ static int cmd_motor_stop(int argc, char **argv){
     if(motor_stop_args.duration_ms->count > 0){
         duration_ms = motor_stop_args.duration_ms->ival[0];
     }
-    bool info = motor_stop_args.info->count > 0;
 
-    if(info){
-        ESP_LOGI("MOTOR_CMD", "Currently Left Motor Speed: %d, Right Motor Speed: %d\n", current_speed[MOTOR_LEFT], current_speed[MOTOR_RIGHT]);
-    }
     esp_err_t err = DC_Motor_Stop(duration_ms);
     if(err != ESP_OK){
         ESP_LOGE("MOTOR_CMD", "Failed to stop motor (err=%d)!!!", err);
@@ -216,8 +211,7 @@ static int cmd_motor_stop(int argc, char **argv){
 
 void register_motor_stop(void){
     motor_stop_args.duration_ms = arg_int0(NULL, NULL, "<duration_ms>", "Duration for smooth speed change (ms), default 300ms)");
-    motor_stop_args.info = arg_lit0(NULL, "info", "Print current motor speeds before stopping");
-    motor_stop_args.end = arg_end(3);
+    motor_stop_args.end = arg_end(2);
 
     const esp_console_cmd_t cmd = {
         .command = "motor_stop",

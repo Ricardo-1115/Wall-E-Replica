@@ -10,6 +10,8 @@
 #include "cJSON.h"        
 #include <sys/param.h>    
 #include "DC_Motor.h"     
+#include "Servo_app.h"
+#include "esp_camera.h"
 
 
 #define WIFI_SSID "8557-2.4G"
@@ -19,14 +21,60 @@ static const char *TAG = "WIFI";
 static EventGroupHandle_t wifi_event_group;
 
 
+
+// 视频流请求处理函数
+static esp_err_t stream_handle(httpd_req_t *req){
+    camera_fb_t *fb = NULL;
+    esp_err_t res = ESP_OK;
+    char *part_buf[64];
+
+    // 1. 发送 HTTP 头， 告诉浏览器这是一个“混合替换”视频流，并设定边界线
+    res = httpd_resp_set_type(req, "multipart/x-mixed-replace;boundary=123456789000000000000987654321");
+    if(res != ESP_OK) return res;
+
+    // 2. 进入死循环，不断抓拍并发送
+    while(true){
+        fb = esp_camera_fb_get();       // 从 DMA 抓取一帧图像
+        if(!fb){
+            ESP_LOGE("CAM", "抓图失败");
+            res = ESP_FAIL;
+        }
+        else {
+            // 3. 发送单帧的数据头(包括大小和类型)
+            size_t hlen = snprintf((char *)part_buf, 64, "Content-Type: image/jpeg\r\nContent-Length:%u\r\n\r\n", fb->len);
+            res = httpd_resp_send_chunk(req, (const char *)part_buf, hlen);
+             
+            // 4. 发送真正的 JPEG 图像数据
+            if(res == ESP_OK){
+                res = httpd_resp_send_chunk(req, (const char *)fb->buf, fb->len);
+            }
+
+            // 5. 发送边界线，标志着这一帧结束
+            if(res == ESP_OK){
+                res = httpd_resp_send_chunk(req, "\r\n--123456789000000000000987654321\r\n", 37);
+            }
+            esp_camera_fb_return(fb);       // 释放这一帧内存，还给底层驱动
+        }
+
+         // 如果客户端断开了连接， res会变成 ESP_FAIL， 此时必须 break 退出死循环
+         if(res != ESP_OK) break;
+    }
+    return res;
+    
+}
+
 // --- WebSocket 核心处理函数 ---
-// 此函数处理 WebSocket 连接和消息接收，用于接收客户端发送的电机控制命令
+// 此函数处理 WebSocket 连接和消息接收，用于接收客户端发送的电机和舵机控制命令
 // 通信流程：
-// 1. 客户端（例如手机App）通过WebSocket连接到ESP32的/ws端点
-// 2. 客户端发送JSON格式的消息，如 {"L": 50, "R": -30} 表示左电机速度50，右电机速度-30
-// 3. ESP32接收消息，解析JSON，提取速度值，放入电机命令队列
-// 4. 电机控制任务从队列读取命令，异步控制电机速度
-// 5. 客户端可以持续发送新命令，实现实时控制
+// 1. 客户端（例如手机App/浏览器）通过WebSocket连接到ESP32的/ws端点
+// 2. 客户端发送JSON格式的消息，例如：
+//    {"L": 50, "R": -30, "S": [50.0, 50.0, 50.0, 50.0, 50.0, 0.0, 0.0], "D": 100}
+//    - L/R: 左右履带电机速度（-100 到 100）
+//    - S: 7个伺服关节的目标角度百分比（0.0 到 100.0）
+//    - D: 伺服关节动作的缓动持续时间（ms）
+// 3. ESP32接收消息并解析JSON，提取动力和关节数据
+// 4. 将提取的数据分别放入对应的 FreeRTOS 队列 (motor_cmd_queue, servo_cmd_queue)
+// 5. 底层电机和舵机控制任务从队列中读取命令，进行异步平滑控制
 static esp_err_t ws_handler(httpd_req_t *req) {
     // 处理WebSocket握手请求（HTTP GET）
     if (req->method == HTTP_GET) {
@@ -55,24 +103,62 @@ static esp_err_t ws_handler(httpd_req_t *req) {
         ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
         if (ret == ESP_OK) {
             // --- 核心解析与入队逻辑 ---
-            // 解析接收到的JSON数据
             cJSON *root = cJSON_Parse((char *)ws_pkt.payload);
             if (root != NULL) {
-                // 提取JSON中的"L"（左电机速度）和"R"（右电机速度）字段
+                
+                // ==========================================
+                // [模块 A] 履带直流电机数据解析 (L, R)
+                // ==========================================
                 cJSON *l_item = cJSON_GetObjectItem(root, "L");
                 cJSON *r_item = cJSON_GetObjectItem(root, "R");
 
-                // 检查字段是否存在且为数字
                 if (cJSON_IsNumber(l_item) && cJSON_IsNumber(r_item)) {
-                    motor_cmd_t new_cmd;  // 创建新的电机命令结构体
+                    motor_cmd_t new_cmd;  
                     // 钳位保护：确保速度值在-100到100范围内，防止越界
                     new_cmd.left_speed = (int8_t)MAX(-100, MIN(100, l_item->valueint));
                     new_cmd.right_speed = (int8_t)MAX(-100, MIN(100, r_item->valueint));
 
-                    // 将最新指令覆盖写入长度为1的队列
-                    // 即使队列满了也会覆盖旧数据，保证底层拿到的是最新指令（实时控制的关键）
-                    xQueueOverwrite(motor_cmd_queue, &new_cmd);
+                    // 将最新指令覆盖写入长度为1的队列 (适用于 motor_cmd_queue)
+                    if(motor_cmd_queue != NULL) {
+                        xQueueOverwrite(motor_cmd_queue, &new_cmd);
+                    }
                 }
+
+                // ==========================================
+                // [模块 B] 伺服电机动作数据解析 (S 数组, D 延时)
+                // ==========================================
+                cJSON *s_array = cJSON_GetObjectItem(root, "S");
+                if (s_array != NULL && cJSON_IsArray(s_array)) {
+                    if (cJSON_GetArraySize(s_array) == 7) {
+                        servo_cmd_t s_cmd;
+
+                        // 提取 D (Duration) 参数，没有则默认 100ms
+                        cJSON *d_item = cJSON_GetObjectItem(root, "D");
+                        if (d_item != NULL && cJSON_IsNumber(d_item)) {
+                            s_cmd.duration_ms = (uint32_t)MAX(0, d_item->valueint);
+                        } else {
+                            s_cmd.duration_ms = 100;
+                        }
+
+                        // 提取 7 个关节的百分比，增加安全钳位保护 (0.0 到 100.0)
+                        for (int i = 0; i < 7; i++) {
+                            cJSON *item = cJSON_GetArrayItem(s_array, i);
+                            if (item != NULL && cJSON_IsNumber(item)) {
+                                s_cmd.percentages[i] = (float)MAX(0.0, MIN(100.0, item->valuedouble));
+                            } else {
+                                s_cmd.percentages[i] = 50.0f; // 异常数据强制回中
+                            }
+                        }
+
+                        // 发送到舵机控制队列 (假设伺服队列大小大于1，使用xQueueSend)
+                        if(servo_cmd_queue != NULL) {
+                            xQueueSend(servo_cmd_queue, &s_cmd, 0); 
+                        }
+                    } else {
+                        ESP_LOGW("WS", "舵机数组长度异常 (预期 7，实际 %d)", cJSON_GetArraySize(s_array));
+                    }
+                }
+
                 cJSON_Delete(root);  // 释放JSON对象内存，防止内存泄漏
             }
             // ------------------------
@@ -93,6 +179,7 @@ void start_web_server()
 {
     httpd_handle_t server = NULL;  // 服务器句柄，用于管理HTTP服务器实例
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();  // 使用默认HTTP服务器配置
+    config.max_open_sockets = 5;
 
     // 启动HTTP服务器，如果成功则注册URI处理器
     if (httpd_start(&server, &config) == ESP_OK)
@@ -109,6 +196,16 @@ void start_web_server()
         // 注册URI处理器，将/ws路径绑定到ws_handler函数
         httpd_register_uri_handler(server, &ws_uri);
         ESP_LOGI("WS", "WebSocket 服务器启动成功，节点: /ws");  // 记录启动成功日志
+
+        // 注册视频流路由
+        httpd_uri_t stream_uri = {
+            .uri = "/stream",
+            .method = HTTP_GET,
+            .handler = stream_handle,
+            .user_ctx = NULL
+        };
+        httpd_register_uri_handler(server, &stream_uri);
+        ESP_LOGI("WIFI", "Web Server 启动成功！图传和指令链路以就绪.");
     }
     // 如果启动失败，函数静默返回（实际应用中应添加错误处理）
 }
@@ -189,6 +286,7 @@ esp_err_t wifi_init(void)
 
     ESP_LOGW(TAG, "3. 启动阶段");
     ESP_ERROR_CHECK(esp_wifi_start()); // 启动 WIFI 驱动程序
+    // esp_wifi_set_ps(WIFI_PS_NONE);
 
     ESP_LOGW(TAG, "4. 连接阶段");
     ESP_ERROR_CHECK(esp_wifi_connect()); // 连接到配置的 WiFi 网络

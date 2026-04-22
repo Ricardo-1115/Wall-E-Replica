@@ -1,3 +1,6 @@
 dependencies:
-  espressif/led_strip: "^3.0.3"
-  
+  espressif/led_strip: ^3.0.3
+
+
+  nixy4/u8g2: ^0.1.4
+  espressif/esp32-camera: '*'

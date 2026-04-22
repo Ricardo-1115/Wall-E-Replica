@@ -16,3 +16,240 @@ menu "Example Configuration"
             reached, no more characters will be accepted by the console.
 
 endmenu
+menu "u8g2 Configuration"
+
+	choice U8G2_DISPLAY_DRIVER_CHIP
+		prompt "u8g2 display driver family"
+		default U8G2_DISPLAY_DRIVER_ALL
+		help
+			Select which u8g2 display driver family to compile.
+			Default is ALL for backward compatibility.
+
+		config U8G2_DISPLAY_DRIVER_ALL
+			bool "all drivers"
+
+		config U8G2_DISPLAY_DRIVER_A2PRINTER
+			bool "a2printer"
+
+		config U8G2_DISPLAY_DRIVER_CH1120
+			bool "ch1120"
+
+		config U8G2_DISPLAY_DRIVER_GP1247AI
+			bool "gp1247ai"
+
+		config U8G2_DISPLAY_DRIVER_GP1287AI
+			bool "gp1287ai"
+
+		config U8G2_DISPLAY_DRIVER_GP1294AI
+			bool "gp1294ai"
+
+		config U8G2_DISPLAY_DRIVER_GU800
+			bool "gu800"
+
+		config U8G2_DISPLAY_DRIVER_HD44102
+			bool "hd44102"
+
+		config U8G2_DISPLAY_DRIVER_IL3820
+			bool "il3820"
+
+		config U8G2_DISPLAY_DRIVER_IST3020
+			bool "ist3020"
+
+		config U8G2_DISPLAY_DRIVER_IST3088
+			bool "ist3088"
+
+		config U8G2_DISPLAY_DRIVER_IST7920
+			bool "ist7920"
+
+		config U8G2_DISPLAY_DRIVER_KS0108
+			bool "ks0108"
+
+		config U8G2_DISPLAY_DRIVER_LC7981
+			bool "lc7981"
+
+		config U8G2_DISPLAY_DRIVER_LD7032
+			bool "ld7032"
+
+		config U8G2_DISPLAY_DRIVER_LS013B7DH03
+			bool "ls013b7dh03"
+
+		config U8G2_DISPLAY_DRIVER_MAX7219
+			bool "max7219"
+
+		config U8G2_DISPLAY_DRIVER_PCD8544
+			bool "pcd8544"
+
+		config U8G2_DISPLAY_DRIVER_PCF8812
+			bool "pcf8812"
+
+		config U8G2_DISPLAY_DRIVER_PCF8814
+			bool "pcf8814"
+
+		config U8G2_DISPLAY_DRIVER_S1D15300
+			bool "s1d15300"
+
+		config U8G2_DISPLAY_DRIVER_S1D15721
+			bool "s1d15721"
+
+		config U8G2_DISPLAY_DRIVER_S1D15E06
+			bool "s1d15e06"
+
+		config U8G2_DISPLAY_DRIVER_SBN1661
+			bool "sbn1661"
+
+		config U8G2_DISPLAY_DRIVER_SED1330
+			bool "sed1330"
+
+		config U8G2_DISPLAY_DRIVER_SH1106
+			bool "sh1106"
+
+		config U8G2_DISPLAY_DRIVER_SH1107
+			bool "sh1107"
+
+		config U8G2_DISPLAY_DRIVER_SH1108
+			bool "sh1108"
+
+		config U8G2_DISPLAY_DRIVER_SH1122
+			bool "sh1122"
+
+		config U8G2_DISPLAY_DRIVER_SSD1305
+			bool "ssd1305"
+
+		config U8G2_DISPLAY_DRIVER_SSD1306
+			bool "ssd1306"
+
+		config U8G2_DISPLAY_DRIVER_SSD1309
+			bool "ssd1309"
+
+		config U8G2_DISPLAY_DRIVER_SSD1312
+			bool "ssd1312"
+
+		config U8G2_DISPLAY_DRIVER_SSD1315
+			bool "ssd1315"
+
+		config U8G2_DISPLAY_DRIVER_SSD1316
+			bool "ssd1316"
+
+		config U8G2_DISPLAY_DRIVER_SSD1317
+			bool "ssd1317"
+
+		config U8G2_DISPLAY_DRIVER_SSD1318
+			bool "ssd1318"
+
+		config U8G2_DISPLAY_DRIVER_SSD1320
+			bool "ssd1320"
+
+		config U8G2_DISPLAY_DRIVER_SSD1322
+			bool "ssd1322"
+
+		config U8G2_DISPLAY_DRIVER_SSD1325
+			bool "ssd1325"
+
+		config U8G2_DISPLAY_DRIVER_SSD1326
+			bool "ssd1326"
+
+		config U8G2_DISPLAY_DRIVER_SSD1327
+			bool "ssd1327"
+
+		config U8G2_DISPLAY_DRIVER_SSD1329
+			bool "ssd1329"
+
+		config U8G2_DISPLAY_DRIVER_SSD1362
+			bool "ssd1362"
+
+		config U8G2_DISPLAY_DRIVER_SSD1363
+			bool "ssd1363"
+
+		config U8G2_DISPLAY_DRIVER_SSD1606
+			bool "ssd1606"
+
+		config U8G2_DISPLAY_DRIVER_SSD1607
+			bool "ssd1607"
+
+		config U8G2_DISPLAY_DRIVER_ST7302
+			bool "st7302"
+
+		config U8G2_DISPLAY_DRIVER_ST7305
+			bool "st7305"
+
+		config U8G2_DISPLAY_DRIVER_ST7511
+			bool "st7511"
+
+		config U8G2_DISPLAY_DRIVER_ST75160
+			bool "st75160"
+
+		config U8G2_DISPLAY_DRIVER_ST75161
+			bool "st75161"
+
+		config U8G2_DISPLAY_DRIVER_ST75256
+			bool "st75256"
+
+		config U8G2_DISPLAY_DRIVER_ST7528
+			bool "st7528"
+
+		config U8G2_DISPLAY_DRIVER_ST75320
+			bool "st75320"
+
+		config U8G2_DISPLAY_DRIVER_ST7539
+			bool "st7539"
+
+		config U8G2_DISPLAY_DRIVER_ST7565
+			bool "st7565"
+
+		config U8G2_DISPLAY_DRIVER_ST7567
+			bool "st7567"
+
+		config U8G2_DISPLAY_DRIVER_ST7571
+			bool "st7571"
+
+		config U8G2_DISPLAY_DRIVER_ST7586S
+			bool "st7586s"
+
+		config U8G2_DISPLAY_DRIVER_ST7588
+			bool "st7588"
+
+		config U8G2_DISPLAY_DRIVER_ST7920
+			bool "st7920"
+
+		config U8G2_DISPLAY_DRIVER_STDIO
+			bool "stdio"
+
+		config U8G2_DISPLAY_DRIVER_T6963
+			bool "t6963"
+
+		config U8G2_DISPLAY_DRIVER_UC1601
+			bool "uc1601"
+
+		config U8G2_DISPLAY_DRIVER_UC1604
+			bool "uc1604"
+
+		config U8G2_DISPLAY_DRIVER_UC1608
+			bool "uc1608"
+
+		config U8G2_DISPLAY_DRIVER_UC1609
+			bool "uc1609"
+
+		config U8G2_DISPLAY_DRIVER_UC1610
+			bool "uc1610"
+
+		config U8G2_DISPLAY_DRIVER_UC1611
+			bool "uc1611"
+
+		config U8G2_DISPLAY_DRIVER_UC1617
+			bool "uc1617"
+
+		config U8G2_DISPLAY_DRIVER_UC1628
+			bool "uc1628"
+
+		config U8G2_DISPLAY_DRIVER_UC1638
+			bool "uc1638"
+
+		config U8G2_DISPLAY_DRIVER_UC1698
+			bool "uc1698"
+
+		config U8G2_DISPLAY_DRIVER_UC1701
+			bool "uc1701"
+
+	endchoice
+
+endmenu

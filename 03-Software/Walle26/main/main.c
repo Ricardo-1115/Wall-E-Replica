@@ -8,6 +8,7 @@
  */
 #include <stdio.h>
 #include <string.h>
+#include <u8g2.h>
 #include "esp_system.h"
 #include "esp_log.h"
 #include "esp_console.h"
@@ -15,14 +16,14 @@
 #include "esp_vfs_fat.h"
 #include "nvs.h"
 #include "nvs_flash.h"
-#include "cmd_system.h"
-#include "cmd_nvs.h"
+#include "command.h"
 #include "led_strip.h"
 #include "DC_Motor.h"
-#include "PCA9685.h"
+#include "Servo_app.h"
 #include "wifi.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
+#include "DFPlayerMini.h"
+#include "esp32_hw_i2c.h"
+#include "display.h"
 
 
 
@@ -107,22 +108,109 @@ static void initialize_nvs(void)
     ESP_ERROR_CHECK(err);
 }
 
-void app_main(void)
-{
+// ============ 全局 I2C 总线管理 ============
+static i2c_master_bus_handle_t g_i2c_bus_handle = NULL;
 
-    DC_Motor_Init();
-    motor_cmd_queue = xQueueCreate(1, sizeof(motor_cmd_t));
-    if (motor_cmd_queue == NULL) {
-        ESP_LOGE("MAIN", "队列创建失败！");
+// I2C 总线初始化（一主多从）
+static esp_err_t init_i2c_bus(void)
+{
+    if (g_i2c_bus_handle != NULL) {
+        ESP_LOGI(TAG, "I2C 总线已初始化");
+        return ESP_OK;
+    }
+
+    i2c_master_bus_config_t bus_config = {
+        .i2c_port = I2C_NUM_0,
+        .sda_io_num = GPIO_NUM_4,
+        .scl_io_num = GPIO_NUM_5,
+        .clk_source = I2C_CLK_SRC_DEFAULT,
+        .glitch_ignore_cnt = 7,
+        .intr_priority = 0,
+        .trans_queue_depth = 0,
+        .flags.enable_internal_pullup = 1,
+        .flags.allow_pd = 0,
+    };
+
+    esp_err_t err = i2c_new_master_bus(&bus_config, &g_i2c_bus_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "I2C 总线创建失败: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    ESP_LOGI(TAG, "I2C 总线初始化成功 (I2C_NUM_0, SDA=GPIO4, SCL=GPIO5, 400kHz)");
+    return ESP_OK;
+}
+
+// ============ U8G2 OLED 初始化 ============
+u8g2_t u8g2;
+static u8g2_esp32_i2c_ctx_t g_oled_i2c_ctx = {
+    .cfg = U8G2_ESP32_I2C_CONFIG_DEFAULT(),
+};
+
+static esp_err_t init_oled_display(void)
+{
+    ESP_LOGI(TAG, "初始化 U8G2 OLED...");
+
+    // 使用全局 I2C 总线初始化 U8G2
+    esp_err_t err = u8g2_esp32_i2c_init_with_bus(&g_oled_i2c_ctx, g_i2c_bus_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "U8G2 I2C 上下文初始化失败: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    // 设置 U8G2 外观
+    u8g2_Setup_ssd1306_i2c_128x64_noname_f(&u8g2, U8G2_R0,
+        u8x8_byte_esp32_hw_i2c, u8x8_gpio_and_delay_esp32_i2c);
+
+    // 初始化显示屏
+    u8g2_InitDisplay(&u8g2);
+    u8g2_SetPowerSave(&u8g2, 0); // 关闭省电模式
+
+    u8g2_ClearBuffer(&u8g2);
+    u8g2_SendBuffer(&u8g2);
+
+    ESP_LOGI(TAG, "U8G2 OLED 初始化成功");
+    return ESP_OK;
+}
+
+// ============ 舵机硬件初始化 ============
+static esp_err_t init_servo_hardware(void)
+{
+    ESP_LOGI(TAG, "初始化舵机硬件...");
+
+    esp_err_t err = servo_hw_init(g_i2c_bus_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "舵机硬件初始化失败: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    ESP_LOGI(TAG, "舵机硬件初始化成功");
+    return ESP_OK;
+}
+
+// ============ I2C 设备初始化层 ============
+static void init_i2c_devices(void)
+{
+    if (init_i2c_bus() != ESP_OK) {
+        ESP_LOGE(TAG, "I2C 总线初始化失败，程序退出");
         return;
     }
 
-    // 3. 创建独立运行的电机控制任务
-    xTaskCreate(motor_control_task, "motor_ctrl_task", 4096, NULL, 15, NULL);
-    pca9685_init();
-    pca9685_set_freq(50);
+    if (init_oled_display() != ESP_OK) {
+        ESP_LOGE(TAG, "OLED 初始化失败");
+        // 继续运行，不影响其他功能
+    }
 
+    if (init_servo_hardware() != ESP_OK) {
+        ESP_LOGE(TAG, "舵机硬件初始化失败");
+        // 继续运行，不影响其他功能
+    }
 
+    ESP_LOGI(TAG, "所有 I2C 设备初始化完成");
+}
+
+void app_main(void)
+{
     esp_console_repl_t *repl = NULL;
     esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
     /* Prompt to be printed before each line.
@@ -132,7 +220,24 @@ void app_main(void)
     repl_config.max_cmdline_length = CONFIG_CONSOLE_MAX_COMMAND_LINE_LENGTH;
 
     initialize_nvs();
-    // wifi_init();
+    // 初始化 I2C 设备和总线
+    // init_i2c_devices();
+    
+    // DFPlayerMini_Init();
+    init_camera();
+    wifi_init();
+
+    DC_Motor_Init();
+    motor_cmd_queue = xQueueCreate(1, sizeof(motor_cmd_t));
+    if (motor_cmd_queue == NULL) {
+        ESP_LOGE("MAIN", "队列创建失败！");
+        return;
+    }
+
+    // 创建独立运行的电机控制任务
+    xTaskCreatePinnedToCore(motor_control_task, "motor_ctrl_task", 4096, NULL, 15, NULL, 1);
+    // 初始化舵机控制系统
+    servo_app_init();
 
 #if CONFIG_CONSOLE_STORE_HISTORY
     initialize_filesystem();
@@ -145,21 +250,15 @@ void app_main(void)
     /* Register commands */
     esp_console_register_help_command();
     register_system_common();
-#if SOC_LIGHT_SLEEP_SUPPORTED
-    register_system_light_sleep();
-#endif
-#if SOC_DEEP_SLEEP_SUPPORTED
-    register_system_deep_sleep();
-#endif
+
     register_nvs();
 
-    register_hello();
-    register_echo();
     register_motor_set();
     register_motor_stop();
     register_servo();
     register_servo_key();
-
+    register_servo_calib();
+    register_dfplayer_play_folder();
 
 #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
     esp_console_dev_uart_config_t hw_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
@@ -180,10 +279,9 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_console_start_repl(repl));
 
     configure_led();
-    // pca9685_set_angle(0, 180.0f); 
-    // vTaskDelay(1000 / portTICK_PERIOD_MS); 
-    // pca9685_set_angle(0, 90.0f); 
+    // example_demo_oled_ui();
     while(1) {
         blink_led();
     }
 }
+

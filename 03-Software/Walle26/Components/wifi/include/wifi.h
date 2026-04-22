@@ -4,4 +4,5 @@
 
 
 esp_err_t wifi_init(void);
+void init_camera(void);
 

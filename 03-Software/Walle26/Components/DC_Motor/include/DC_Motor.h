@@ -25,17 +25,17 @@ extern void motor_control_task(void *pvParameters);
 
 #define LEDC_TIMER              LEDC_TIMER_0
 #define LEDC_MODE               LEDC_LOW_SPEED_MODE
-#define LEDC_OUTPUT_LEFT_IO     (5) // Define the output GPIO for the left motor
-#define LEDC_OUTPUT_RIGHT_IO    (6) // Define the output GPIO for the right motor 
+#define LEDC_OUTPUT_LEFT_IO     (2) // Define the output GPIO for the left motor
+#define LEDC_OUTPUT_RIGHT_IO    (38) // Define the output GPIO for the right motor 
 #define LEDC_CHANNEL            LEDC_CHANNEL_0
 #define LEDC_DUTY_RES           LEDC_TIMER_13_BIT // Set duty resolution to 13 bits
 #define LEDC_FREQUENCY          (4000) // Frequency in Hertz. Set frequency at 4 kHz
 
-#define DC_MOTOR_STBY GPIO_NUM_15  // Standby pin for motor driver (LOW = Standby, HIGH = Active)
-#define DC_Motor_LEFT_GPIO_1 GPIO_NUM_11
-#define DC_Motor_LEFT_GPIO_2 GPIO_NUM_12
-#define DC_Motor_RIGHT_GPIO_1 GPIO_NUM_13
-#define DC_Motor_RIGHT_GPIO_2 GPIO_NUM_14
+
+#define DC_Motor_LEFT_GPIO_1 GPIO_NUM_39
+#define DC_Motor_LEFT_GPIO_2 GPIO_NUM_40
+#define DC_Motor_RIGHT_GPIO_1 GPIO_NUM_41
+#define DC_Motor_RIGHT_GPIO_2 GPIO_NUM_42
 #define MOTOR_SPEED_MIN -100
 #define MOTOR_SPEED_MAX 100
 
@@ -72,10 +72,5 @@ esp_err_t DC_Motor_Init(void);
 esp_err_t DC_Motor_Stop(uint32_t duration_ms);
 esp_err_t DC_Motor_SetSpeedSmoothAsync(motor_id_t motor_id, int8_t target_speed, uint32_t duration_ms);
 
-
-void register_hello(void);
-void register_echo(void);
-void register_motor_set(void);
-void register_motor_stop(void);
 
 #endif // DC_MOTOR_H

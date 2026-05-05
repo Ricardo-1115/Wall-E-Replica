@@ -14,8 +14,8 @@
 #include "esp_camera.h"
 
 
-#define WIFI_SSID "8557-2.4G"
-#define WIFI_PASS "88888888"
+#define WIFI_SSID CONFIG_WIFI_SSID
+#define WIFI_PASS CONFIG_WIFI_PASSWORD
 #define IP_GOT_BIT BIT0
 static const char *TAG = "WIFI";
 static EventGroupHandle_t wifi_event_group;
@@ -26,7 +26,7 @@ static EventGroupHandle_t wifi_event_group;
 static esp_err_t stream_handle(httpd_req_t *req){
     camera_fb_t *fb = NULL;
     esp_err_t res = ESP_OK;
-    char *part_buf[64];
+    char part_buf[64];
 
     // 1. 发送 HTTP 头， 告诉浏览器这是一个“混合替换”视频流，并设定边界线
     res = httpd_resp_set_type(req, "multipart/x-mixed-replace;boundary=123456789000000000000987654321");
@@ -41,8 +41,8 @@ static esp_err_t stream_handle(httpd_req_t *req){
         }
         else {
             // 3. 发送单帧的数据头(包括大小和类型)
-            size_t hlen = snprintf((char *)part_buf, 64, "Content-Type: image/jpeg\r\nContent-Length:%u\r\n\r\n", fb->len);
-            res = httpd_resp_send_chunk(req, (const char *)part_buf, hlen);
+            size_t hlen = snprintf(part_buf, 64, "Content-Type: image/jpeg\r\nContent-Length:%u\r\n\r\n", fb->len);
+            res = httpd_resp_send_chunk(req, part_buf, hlen);
              
             // 4. 发送真正的 JPEG 图像数据
             if(res == ESP_OK){
@@ -150,9 +150,9 @@ static esp_err_t ws_handler(httpd_req_t *req) {
                             }
                         }
 
-                        // 发送到舵机控制队列 (假设伺服队列大小大于1，使用xQueueSend)
+                        // 覆盖写入深度为1的队列（与电机队列策略一致，保证始终执行最新指令）
                         if(servo_cmd_queue != NULL) {
-                            xQueueSend(servo_cmd_queue, &s_cmd, 0); 
+                            xQueueOverwrite(servo_cmd_queue, &s_cmd);
                         }
                     } else {
                         ESP_LOGW("WS", "舵机数组长度异常 (预期 7，实际 %d)", cJSON_GetArraySize(s_array));
@@ -175,39 +175,58 @@ static esp_err_t ws_handler(httpd_req_t *req) {
 // - 创建HTTP服务器实例
 // - 注册/ws端点，绑定ws_handler处理函数
 // - 客户端可以通过 ws://ESP32_IP/ws 连接WebSocket
+// - 图传流媒体监听 :8081，与控制服务器分离，避免 while(true) 阻塞 WebSocket
 void start_web_server()
 {
-    httpd_handle_t server = NULL;  // 服务器句柄，用于管理HTTP服务器实例
-    httpd_config_t config = HTTPD_DEFAULT_CONFIG();  // 使用默认HTTP服务器配置
-    config.max_open_sockets = 5;
+    httpd_handle_t server_ctrl = NULL;
+    httpd_handle_t server_stream = NULL;
 
-    // 启动HTTP服务器，如果成功则注册URI处理器
-    if (httpd_start(&server, &config) == ESP_OK)
+    // ===== 控制服务器 (端口 80) =====
+    httpd_config_t config_ctrl = HTTPD_DEFAULT_CONFIG();
+    config_ctrl.core_id = 0;             // 绑定 Core 0（网络/协议核）
+    config_ctrl.server_port = 80;
+    config_ctrl.max_open_sockets = 5;
+
+    if (httpd_start(&server_ctrl, &config_ctrl) == ESP_OK)
     {
-        // 定义WebSocket URI结构体：路径为/ws，方法为GET，处理函数为ws_handler
-        // is_websocket=true 表示这是一个WebSocket端点，而非普通HTTP
         static const httpd_uri_t ws_uri = {
-            .uri = "/ws",              // WebSocket端点路径
-            .method = HTTP_GET,        // HTTP方法（WebSocket握手使用GET）
-            .handler = ws_handler,     // 绑定处理函数
-            .user_ctx = NULL,          // 用户上下文（此处不需要）
-            .is_websocket = true       // 标记为WebSocket端点
+            .uri = "/ws",
+            .method = HTTP_GET,
+            .handler = ws_handler,
+            .user_ctx = NULL,
+            .is_websocket = true
         };
-        // 注册URI处理器，将/ws路径绑定到ws_handler函数
-        httpd_register_uri_handler(server, &ws_uri);
-        ESP_LOGI("WS", "WebSocket 服务器启动成功，节点: /ws");  // 记录启动成功日志
+        httpd_register_uri_handler(server_ctrl, &ws_uri);
+        ESP_LOGI("WS", "WebSocket 控制服务器启动成功 -> ws://IP:80/ws");
+    }
+    else {
+        ESP_LOGE("WS", "控制服务器启动失败！");
+    }
 
-        // 注册视频流路由
+    // ===== 流媒体服务器 (端口 8081，独立于控制通道) =====
+    httpd_config_t config_stream = HTTPD_DEFAULT_CONFIG();
+    config_stream.core_id = 0;
+    config_stream.server_port = 8081;
+    config_stream.ctrl_port = 32769;         // 与控制服务器(32768)错开，避免 EADDRINUSE
+    config_stream.max_open_sockets = 3;              // 只服务图传，无需太多连接
+    config_stream.task_priority = tskIDLE_PRIORITY + 2; // 低于控制服务器，不抢 CPU
+    config_stream.stack_size = 3072;                 // 图传不需要大栈
+
+    if (httpd_start(&server_stream, &config_stream) == ESP_OK)
+    {
         httpd_uri_t stream_uri = {
             .uri = "/stream",
             .method = HTTP_GET,
             .handler = stream_handle,
             .user_ctx = NULL
         };
-        httpd_register_uri_handler(server, &stream_uri);
-        ESP_LOGI("WIFI", "Web Server 启动成功！图传和指令链路以就绪.");
+        httpd_register_uri_handler(server_stream, &stream_uri);
+        ESP_LOGI("WS", "图传流媒体服务器启动成功 -> http://IP:8081/stream");
+        ESP_LOGI("WIFI", "Web Server 全部启动！控制:80 | 图传:8081");
     }
-    // 如果启动失败，函数静默返回（实际应用中应添加错误处理）
+    else {
+        ESP_LOGE("WS", "图传服务器启动失败！");
+    }
 }
 
 void App_task(void *pvParameters)
@@ -273,7 +292,7 @@ esp_err_t wifi_init(void)
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));                        // 初始化 WIFI 驱动程序
     wifi_event_group = xEventGroupCreate();                      // 创建一个事件组来管理 WiFi 连接状态
-    xTaskCreate(App_task, "wifi_app_task", 4096, NULL, 5, NULL); // 创建一个新的 FreeRTOS 任务来运行应用程序逻辑
+    xTaskCreatePinnedToCore(App_task, "wifi_app_task", 4096, NULL, 5, NULL, 0); // 绑定 Core 0（网络协议核）
 
     ESP_LOGW(TAG, "2. 配置阶段");
     esp_wifi_set_mode(WIFI_MODE_STA); // 设置 WiFi 模式为 Station 模式
@@ -286,7 +305,7 @@ esp_err_t wifi_init(void)
 
     ESP_LOGW(TAG, "3. 启动阶段");
     ESP_ERROR_CHECK(esp_wifi_start()); // 启动 WIFI 驱动程序
-    // esp_wifi_set_ps(WIFI_PS_NONE);
+    esp_wifi_set_ps(WIFI_PS_NONE);
 
     ESP_LOGW(TAG, "4. 连接阶段");
     ESP_ERROR_CHECK(esp_wifi_connect()); // 连接到配置的 WiFi 网络

@@ -28,6 +28,7 @@ extern "C"
 	void servo_app_init(void);
     void walle_move_servo(uint8_t channel, float target_angle, uint32_t duration_ms);
     void walle_set_joint_move(uint8_t channel, float percentage, uint32_t duration_ms);
+    void save_joint_config_to_nvs(void);
 
 #ifdef __cplusplus
 }

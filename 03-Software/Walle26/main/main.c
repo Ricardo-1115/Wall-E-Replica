@@ -17,7 +17,6 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "command.h"
-#include "led_strip.h"
 #include "DC_Motor.h"
 #include "Servo_app.h"
 #include "wifi.h"
@@ -41,38 +40,6 @@
 static const char* TAG = "example";
 #define PROMPT_STR CONFIG_IDF_TARGET
 
-#define LED_GPIO GPIO_NUM_48
-led_strip_handle_t led_strip;
-
-static void configure_led(void)
-{
-    led_strip_config_t strip_config = {
-        .strip_gpio_num = LED_GPIO,
-        .max_leds = 1,
-    };
-    led_strip_rmt_config_t rmt_config = {
-        .clk_src = RMT_CLK_SRC_DEFAULT,
-        .resolution_hz = 10000000, // 10MHz
-        .mem_block_symbols = 64, // Default size of RMT memory block is 64 symbols, which can hold up to 21 RGB pixels (21 * 3 * 8 = 504 bits < 512 bits)
-        .flags.with_dma = 1, // Use DMA to transmit data, which can offload the CPU and improve performance when controlling a long LED strip
-    };
-    ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip));
-    led_strip_clear(led_strip);
-    led_strip_refresh(led_strip);
-}
-
-static void blink_led(void)
-{
-    led_strip_set_pixel(led_strip, 0, 255, 0, 0); // Red
-    led_strip_refresh(led_strip);
-    vTaskDelay(pdMS_TO_TICKS(500));
-    led_strip_set_pixel(led_strip, 0, 0, 255, 0); // Green
-    led_strip_refresh(led_strip);
-    vTaskDelay(pdMS_TO_TICKS(500));
-    led_strip_set_pixel(led_strip, 0, 0, 0, 255); // Blue
-    led_strip_refresh(led_strip);
-    vTaskDelay(pdMS_TO_TICKS(500));
-}
 
 /* Console command history can be stored to and loaded from a file.
  * The easiest way to do this is to use FATFS filesystem on top of
@@ -223,7 +190,7 @@ void app_main(void)
     // 初始化 I2C 设备和总线
     // init_i2c_devices();
     
-    // DFPlayerMini_Init();
+    DFPlayerMini_Init();
     init_camera();
     wifi_init();
 
@@ -278,10 +245,9 @@ void app_main(void)
 
     ESP_ERROR_CHECK(esp_console_start_repl(repl));
 
-    configure_led();
     // example_demo_oled_ui();
     while(1) {
-        blink_led();
+        vTaskDelay(pdMS_TO_TICKS(500));
     }
 }
 

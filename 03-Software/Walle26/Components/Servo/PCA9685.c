@@ -7,31 +7,7 @@ static i2c_master_bus_handle_t bus_handle = NULL;     // i2c总线句柄
 static i2c_master_dev_handle_t dev_handle = NULL;     // i2c设备句柄
 
 
-static esp_err_t i2c_pca9685_init_internal(void)
-{
-    i2c_master_bus_config_t bus_config = {
-        .i2c_port = I2C_NUM_0,
-        .sda_io_num = GPIO_NUM_38,
-        .scl_io_num = GPIO_NUM_14,
-        .clk_source = I2C_CLK_SRC_DEFAULT,
-        .glitch_ignore_cnt = 7,
-        .flags = {
-            .enable_internal_pullup = 1,
-        }
-    };
 
-    ESP_ERROR_CHECK(i2c_new_master_bus(&bus_config, &bus_handle));
-
-    i2c_device_config_t device_config = {
-        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
-        .device_address = PCA_Addr,
-        .scl_speed_hz = 400000,
-    };
-    
-    ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &device_config, &dev_handle));
-
-    return ESP_OK;
-}
 
 // 使用外部 I2C 总线初始化（支持一主多从）
 static esp_err_t i2c_pca9685_init_with_bus(i2c_master_bus_handle_t external_bus_handle)
@@ -72,22 +48,8 @@ static esp_err_t i2c_write_register(i2c_master_dev_handle_t i2c_dev, uint8_t reg
     return i2c_master_transmit(i2c_dev, write_buffer, sizeof(write_buffer), timeout_ms);
 }
 
-esp_err_t pca9685_init(void)
-{
-    // 使用内部创建的 I2C 总线初始化（向后兼容）
-    esp_err_t err = i2c_pca9685_init_internal();
-    if (err != ESP_OK) {
-        return err;
-    }
 
-    // 初始化PCA9685
-    uint8_t init_data = 0x00;
-    ESP_ERROR_CHECK(i2c_write_register(dev_handle, PCA_Model, &init_data, 1, 100));
-
-    return ESP_OK;
-}
-
-// 新增公开函数：使用外部 I2C 总线初始化
+// 使用外部 I2C 总线初始化
 esp_err_t pca9685_init_with_bus(i2c_master_bus_handle_t bus_handle)
 {
     esp_err_t err = i2c_pca9685_init_with_bus(bus_handle);

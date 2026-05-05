@@ -4,9 +4,9 @@
 # ==========================================
 
 # 1. ESP-IDF 编译产物与缓存
-Firmware/build/
-Firmware/managed_components/
-Firmware/dependencies.lock
+03-Software/Walle26/build/
+03-Software/Walle26/managed_components/
+03-Software/Walle26/dependencies.lock
 *.bin
 *.elf
 *.map
@@ -14,36 +14,45 @@ Firmware/dependencies.lock
 sdkconfig.old
 
 # 2. 立创EDA (EasyEDA) 自动备份与系统缓存
-Hardware/**/*.bak
-Hardware/**/*.lck
-Hardware/Recovery/
-Hardware/History/
+02-Hardware/**/*.bak
+02-Hardware/**/*.lck
+02-Hardware/Recovery/
+02-Hardware/History/
 
 # 3. Fusion 360 本地缓存与备份
-Mechanical/**/*.f3d.bak
-Mechanical/**/*.f3d.tmp
+04-Mechanical/**/*.f3d.bak
+04-Mechanical/**/*.f3d.tmp
 
-# 4. 操作系统缓存
+# 4. 大型媒体资源 (不纳入Git跟踪)
+05-Assets/**/*.wav
+05-Assets/**/*.mp4
+05-Assets/**/*.avi
+05-Assets/**/*.mov
+
+# 5. 操作系统缓存
 .DS_Store
 .DS_Store?
 ._*
 Thumbs.db
 Desktop.ini
 
-# 5. 编辑器与 IDE 配置文件 (VS Code 等)
+# 6. 编辑器与 IDE 配置文件 (VS Code 等)
 .vscode/
 .idea/
 
-# 6. 通用临时文件
+# 7. 通用临时文件
 *.log
 *.tmp
 *.bak
 *.swp
 *~
 
-# 7. Microsoft Office 临时文件与锁定文件
+# 8. Microsoft Office 临时文件与锁定文件
 ~$*.doc*
 ~$*.xls*
 ~$*.ppt*
 ~*.tmp
 *.tmp
+
+# 9. Claude 缓存
+.claude/

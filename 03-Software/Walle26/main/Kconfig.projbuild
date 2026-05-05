@@ -253,3 +253,19 @@ menu "u8g2 Configuration"
 	endchoice
 
 endmenu
+
+menu "WiFi Configuration"
+
+    config WIFI_SSID
+        string "WiFi SSID"
+        default "myssid"
+        help
+            SSID of the WiFi network WALL-E will connect to.
+
+    config WIFI_PASSWORD
+        string "WiFi Password"
+        default "mypassword"
+        help
+            Password for the WiFi network.
+
+endmenu

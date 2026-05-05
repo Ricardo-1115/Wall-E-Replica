@@ -59,19 +59,9 @@ void register_system_common(void)
 #endif
 }
 
-/* 'hello' command */
-static struct {
-    struct arg_end *end;
-}hello_args;
-
+/* 'hello' command — system diagnostics and WALL-E startup banner */
 static int cmd_hello(int argc, char **argv){
-    int nerrors = arg_parse(argc, argv, (void **) &hello_args);
-    if(nerrors != 0){
-        arg_print_errors(stderr, hello_args.end, argv[0]);
-        return 1;
-    }
-    
-    // 1. 灵魂注入：BnL 启动画面 
+    // 1. 灵魂注入：BnL 启动画面
    printf("\n\e[0;33m"); // 设置终端字体颜色为黄色
     printf("  ____                 _   _   _                          \n");
     printf(" |  _ \\               | \\ | | | |                         \n");
@@ -92,7 +82,7 @@ static int cmd_hello(int argc, char **argv){
     esp_chip_info_t chip_info;
     uint32_t flash_size;
     esp_chip_info(&chip_info);
-    if(esp_flash_get_physical_size(NULL, &flash_size) != ESP_OK) {
+    if(esp_flash_get_size(NULL, &flash_size) != ESP_OK) {
         flash_size = 0;
     }
     
@@ -132,14 +122,12 @@ static int cmd_hello(int argc, char **argv){
 }
 
 static void register_hello(void){
-    hello_args.end = arg_end(1);
-
     const esp_console_cmd_t cmd = {
         .command = "hello",
         .help = "Run WALL-E system diagnostics and status report",
         .hint = NULL,
         .func = &cmd_hello,
-        .argtable = &hello_args
+        .argtable = NULL
     };
 
     ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));

@@ -34,16 +34,11 @@ typedef struct {
 
 
 	// Function declarations
-	// 原始初始化（自动创建 I2C 总线）
-	esp_err_t pca9685_init(void);
-	
-	// 新增：使用外部 I2C 总线初始化（支持一主多从）
+	// 使用外部 I2C 总线初始化（支持一主多从）
 	esp_err_t pca9685_init_with_bus(i2c_master_bus_handle_t bus_handle);
 	
 	void pca9685_set_freq(float freq);
 	void pca9685_set_angle(uint8_t Num, float Angle);
-	void walle_move_servo(uint8_t channel, float target_angle, uint32_t duration_ms);
-	void walle_set_joint_move(uint8_t channel, float percentage, uint32_t duration_ms);
 
 
 #ifdef __cplusplus

@@ -1,3 +1,3 @@
 idf_component_register(SRCS "DFPlayerMini.c"
                     INCLUDE_DIRS "include"
-                    REQUIRES "driver")
+                    REQUIRES "driver" "esp_timer")

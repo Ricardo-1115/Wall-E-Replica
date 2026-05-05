@@ -8,7 +8,7 @@
         "name": "ADC1_CAL_VOL_ATTEN0",
         "pos": 9,
         "readable": true,
-        "value": 476,
+        "value": 244,
         "word": 6,
         "writeable": true
     },
@@ -21,7 +21,7 @@
         "name": "ADC1_CAL_VOL_ATTEN1",
         "pos": 17,
         "readable": true,
-        "value": 504,
+        "value": 300,
         "word": 6,
         "writeable": true
     },
@@ -34,7 +34,7 @@
         "name": "ADC1_CAL_VOL_ATTEN2",
         "pos": 25,
         "readable": true,
-        "value": 444,
+        "value": 212,
         "word": 6,
         "writeable": true
     },
@@ -47,7 +47,7 @@
         "name": "ADC1_CAL_VOL_ATTEN3",
         "pos": 1,
         "readable": true,
-        "value": -24,
+        "value": 268,
         "word": 7,
         "writeable": true
     },
@@ -60,7 +60,7 @@
         "name": "ADC1_INIT_CODE_ATTEN0",
         "pos": 21,
         "readable": true,
-        "value": -80,
+        "value": -40,
         "word": 4,
         "writeable": true
     },
@@ -73,7 +73,7 @@
         "name": "ADC1_INIT_CODE_ATTEN1",
         "pos": 29,
         "readable": true,
-        "value": -16,
+        "value": 108,
         "word": 4,
         "writeable": true
     },
@@ -86,7 +86,7 @@
         "name": "ADC1_INIT_CODE_ATTEN2",
         "pos": 3,
         "readable": true,
-        "value": 104,
+        "value": 100,
         "word": 5,
         "writeable": true
     },
@@ -99,7 +99,7 @@
         "name": "ADC1_INIT_CODE_ATTEN3",
         "pos": 9,
         "readable": true,
-        "value": 124,
+        "value": 100,
         "word": 5,
         "writeable": true
     },
@@ -112,7 +112,7 @@
         "name": "ADC2_CAL_VOL_ATTEN0",
         "pos": 9,
         "readable": true,
-        "value": 436,
+        "value": 460,
         "word": 7,
         "writeable": true
     },
@@ -125,7 +125,7 @@
         "name": "ADC2_CAL_VOL_ATTEN1",
         "pos": 17,
         "readable": true,
-        "value": 220,
+        "value": 244,
         "word": 7,
         "writeable": true
     },
@@ -138,7 +138,7 @@
         "name": "ADC2_CAL_VOL_ATTEN2",
         "pos": 24,
         "readable": true,
-        "value": 248,
+        "value": 252,
         "word": 7,
         "writeable": true
     },
@@ -151,7 +151,7 @@
         "name": "ADC2_CAL_VOL_ATTEN3",
         "pos": 26,
         "readable": true,
-        "value": -8,
+        "value": -4,
         "word": 5,
         "writeable": true
     },
@@ -164,7 +164,7 @@
         "name": "ADC2_INIT_CODE_ATTEN0",
         "pos": 15,
         "readable": true,
-        "value": -148,
+        "value": -64,
         "word": 5,
         "writeable": true
     },
@@ -177,7 +177,7 @@
         "name": "ADC2_INIT_CODE_ATTEN1",
         "pos": 23,
         "readable": true,
-        "value": -12,
+        "value": -16,
         "word": 5,
         "writeable": true
     },
@@ -190,7 +190,7 @@
         "name": "ADC2_INIT_CODE_ATTEN2",
         "pos": 29,
         "readable": true,
-        "value": 56,
+        "value": 52,
         "word": 5,
         "writeable": true
     },
@@ -359,7 +359,7 @@
         "name": "DIG_DBIAS_HVT",
         "pos": 11,
         "readable": true,
-        "value": -36,
+        "value": -24,
         "word": 5,
         "writeable": true
     },
@@ -515,7 +515,7 @@
         "name": "DIS_PAD_JTAG",
         "pos": 19,
         "readable": true,
-        "value": false,
+        "value": true,
         "word": 1,
         "writeable": true
     },
@@ -567,7 +567,7 @@
         "name": "DIS_USB_OTG_DOWNLOAD_MODE",
         "pos": 31,
         "readable": true,
-        "value": false,
+        "value": true,
         "word": 4,
         "writeable": true
     },
@@ -827,7 +827,7 @@
         "name": "K_DIG_LDO",
         "pos": 20,
         "readable": true,
-        "value": -28,
+        "value": 16,
         "word": 4,
         "writeable": true
     },
@@ -840,7 +840,7 @@
         "name": "K_RTC_LDO",
         "pos": 13,
         "readable": true,
-        "value": -32,
+        "value": 16,
         "word": 4,
         "writeable": true
     },
@@ -853,7 +853,7 @@
         "name": "MAC",
         "pos": 0,
         "readable": true,
-        "value": "9c:13:9e:b9:83:f0 (OK)",
+        "value": "98:a3:16:e7:97:10 (OK)",
         "word": 0,
         "writeable": true
     },
@@ -866,7 +866,7 @@
         "name": "OCODE",
         "pos": 13,
         "readable": true,
-        "value": 65,
+        "value": 99,
         "word": 4,
         "writeable": true
     },
@@ -879,7 +879,7 @@
         "name": "OPTIONAL_UNIQUE_ID",
         "pos": 0,
         "readable": true,
-        "value": "ea dc 09 20 00 4a f8 f0 03 c3 4c 6b 63 a5 8f 7d",
+        "value": "0a a6 7e db 69 1d 49 32 39 ca 6f 09 bc 7d 97 55",
         "word": 0,
         "writeable": true
     },
@@ -1256,7 +1256,7 @@
         "name": "TEMP_CALIB",
         "pos": 4,
         "readable": true,
-        "value": -8.0,
+        "value": -11.8,
         "word": 4,
         "writeable": true
     },
@@ -1360,7 +1360,7 @@
         "name": "V_DIG_DBIAS20",
         "pos": 3,
         "readable": true,
-        "value": -44,
+        "value": 48,
         "word": 5,
         "writeable": true
     },
@@ -1373,7 +1373,7 @@
         "name": "V_RTC_DBIAS20",
         "pos": 27,
         "readable": true,
-        "value": -44,
+        "value": 32,
         "word": 4,
         "writeable": true
     },

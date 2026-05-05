@@ -23,26 +23,23 @@ static motor_control_t motors[2] = {
      .stage2_duration_ms = 0,
      .sem = NULL}};
 
-/*
- * 预计算最大占空比，避免每次调用都重新计算。LEDC_DUTY_RES 为位宽（13）。
- */
+/* 13-bit 分辨率下最大占空比 */
 static const uint32_t MAX_DUTY = ((1u << LEDC_DUTY_RES) - 1);
 
-/*
- * 根据 -100..100 的速度值计算占空比（使用绝对值），方向由 GPIO 控制。
- */
+/* 速度值 (-100~100) → PWM 占空比（绝对值取 duty，方向由 GPIO 控制） */
 static inline uint32_t calculate_duty(int8_t speed)
 {
     return (uint32_t)((abs(speed) * MAX_DUTY) / MOTOR_SPEED_MAX);
 }
 
+/* 从硬件 GPIO 电平 + duty 反算当前速度（含四舍五入） */
 static int8_t duty_to_speed(uint32_t duty, int dir_pin1, int dir_pin2)
 {
-    int8_t speed = (int8_t)((duty * MOTOR_SPEED_MAX + (MAX_DUTY / 2)) / MAX_DUTY); // 四舍五入
+    int8_t speed = (int8_t)((duty * MOTOR_SPEED_MAX + (MAX_DUTY / 2)) / MAX_DUTY);
     if (dir_pin1 == 1 && dir_pin2 == 0)
-        return speed; // forward
+        return speed;
     else if (dir_pin1 == 0 && dir_pin2 == 1)
-        return -speed; // reverse
+        return -speed;
     return 0;
 }
 
@@ -75,18 +72,17 @@ static void motor_set_direction(motor_control_t *motor, int8_t speed)
 
 static IRAM_ATTR bool motor_fade_cb(const ledc_cb_param_t *param, void *user_arg)
 {
-    motor_control_t *motor = (motor_control_t *)user_arg;  
+    motor_control_t *motor = (motor_control_t *)user_arg;
 
     if (param->event != LEDC_FADE_END_EVT)
-        return false; // 只处理淡入淡出结束事件
+        return false;
 
     BaseType_t need_yield = pdFALSE;
 
     if (motor->state == MOTOR_STATE_TO_0)
     {
-        // 第一阶段完成，当前占空比为0，准备反向淡入到目标速度
-        motor_set_direction(motor, motor->target_speed); // 先切换方向
-        // 启动第二阶段渐变
+        /* 第一阶段完成（已减速到 0）→ 换向 → 第二阶段加速到目标 */
+        motor_set_direction(motor, motor->target_speed);
         uint32_t target_duty = calculate_duty(motor->target_speed);
         ledc_set_fade_with_time(LEDC_MODE, motor->channel, target_duty, motor->stage2_duration_ms);
         ledc_fade_start(LEDC_MODE, motor->channel, LEDC_FADE_NO_WAIT);
@@ -94,13 +90,10 @@ static IRAM_ATTR bool motor_fade_cb(const ledc_cb_param_t *param, void *user_arg
     }
     else if (motor->state == MOTOR_STATE_TO_TARGET)
     {
-        // 第二阶段完成，已经达到目标速度
         motor->state = MOTOR_STATE_IDLE;
         motor->current_speed = motor->target_speed;
         if (motor->sem)
-        {
-            xSemaphoreGiveFromISR(motor->sem, &need_yield); 
-        }
+            xSemaphoreGiveFromISR(motor->sem, &need_yield);
     }
 
     return (need_yield == pdTRUE);
@@ -148,9 +141,9 @@ esp_err_t DC_Motor_SetSpeedSmoothAsync(motor_id_t motor_id, int8_t target_speed,
 
     if (!direction_change)
     {
-        // same direction, just fade to target
+        // 同方向：直接从当前 duty 渐变到目标 duty
         motor_set_direction(motor, target_speed);
-        motor->target_speed = target_speed;  
+        motor->target_speed = target_speed;
         motor->state = MOTOR_STATE_TO_TARGET;
         motor->stage2_duration_ms = duration_ms; // 为什么要这样可是回调函数中没有用到我是说在不用反向的情况下就用不到motor->stage2_duration_ms吧？是的，在不需要反向的情况下，motor->stage2_duration_ms 这个字段确实没有被使用到。这个字段主要是为了在需要先淡出到0再淡入到目标速度的情况下，存储第二阶段的持续时间，以便在回调函数中使用。对于同方向的情况，我们直接使用传入的 duration_ms 来设置淡入时间，而不需要区分阶段，因此 motor->stage2_duration_ms 在这种情况下没有实际作用。不过，为了保持代码的一致性和简洁性，我们仍然将 duration_ms 赋值给 motor->stage2_duration_ms，这样在回调函数中就可以统一使用 motor->stage2_duration_ms 来获取淡入时间，无论是否需要反向。thanks to chatGPT for the explanation
         uint32_t target_duty = calculate_duty(target_speed);
@@ -159,17 +152,18 @@ esp_err_t DC_Motor_SetSpeedSmoothAsync(motor_id_t motor_id, int8_t target_speed,
     }
     else
     {
-        // direction change, fade to 0 first then fade to target,calculate stage durations based on abs speed difference
+        // 反方向：先减速到 0（阶段一）→ 换向 → 再加速到目标（阶段二）
+        // 两阶段时长按 |当前速|:|目标速| 比例分配
         uint32_t cur_abs = abs(current_speed);
         uint32_t tar_abs = abs(target_speed);
         uint32_t total_diff = cur_abs + tar_abs;
         if (total_diff == 0)
-            return ESP_OK; // 不应该发生
+            return ESP_OK;
 
         motor->stage1_duration_ms = (duration_ms * cur_abs) / total_diff;
         motor->stage2_duration_ms = duration_ms - motor->stage1_duration_ms;
 
-        // first fade to 0 and keep direction unchanged
+        // 阶段一：方向引脚不动，仅 fade 到 0
         motor->target_speed = target_speed;
         motor->state = MOTOR_STATE_TO_0;
         ledc_set_fade_with_time(LEDC_MODE, motor->channel, 0, motor->stage1_duration_ms);
@@ -181,26 +175,24 @@ esp_err_t DC_Motor_SetSpeedSmoothAsync(motor_id_t motor_id, int8_t target_speed,
 
 
 /*
- * @brief Stop the DC motor by setting the PWM duty cycle to zero and putting the motor driver into standby mode.
- * @param duration_ms The duration in milliseconds over which to fade the motor speed down to zero. If set to 0, the motor will stop immediately without fading.
- * This function uses the LEDC fade API to smoothly reduce the motor speed to zero over the specified duration. After fading, it sets the standby pin low to put the motor driver into standby mode, which can help reduce power consumption and prevent unintended movement.
+ * @brief Stop both motors by fading PWM duty to zero.
+ * @param duration_ms Fade duration in ms. 0 = immediate stop.
+ * Uses the LEDC fade API to smoothly reduce both motors to zero speed.
  */
 esp_err_t DC_Motor_Stop(uint32_t duration_ms)
 {
     DC_Motor_SetSpeedSmoothAsync(MOTOR_LEFT, 0, duration_ms);
     DC_Motor_SetSpeedSmoothAsync(MOTOR_RIGHT, 0, duration_ms);
-    
-    ESP_LOGI(__func__, "the speed before stopping: left motor %d, right motor %d", motors[MOTOR_LEFT].current_speed, motors[MOTOR_RIGHT].current_speed);
 
-    /* If fade API is available and duration is specified, use it to smoothly stop the motors */
+    ESP_LOGI(__func__, "the speed before stopping: left motor %d, right motor %d", motors[MOTOR_LEFT].current_speed, motors[MOTOR_RIGHT].current_speed);
 
     return ESP_OK;
 }
 
-// 2. 声明全局队列句柄
+/* 全局队列句柄：main.c 创建，wifi.c 写入，本任务读取 */
 QueueHandle_t motor_cmd_queue = NULL;
 
-// 3. 定义心跳超时时间 (比如 500 毫秒没收到数据就刹车)
+/* 心跳超时阈值：超过此时间未收到指令则判定链路断开 */
 #define HEARTBEAT_TIMEOUT_MS 500
 
 void motor_control_task(void *pvParameters) {
@@ -210,9 +202,6 @@ void motor_control_task(void *pvParameters) {
     ESP_LOGI("MOTOR_TASK", "电机控制任务已启动，等待链路指令...");
 
     while (1) {
-        // 核心亮点：xQueueReceive 自带看门狗功能！
-        // 如果在 HEARTBEAT_TIMEOUT_MS 内收到了前端的数据，返回 pdPASS
-        // 如果超时没收到，返回 errQUEUE_EMPTY
         if (xQueueReceive(motor_cmd_queue, &cmd, pdMS_TO_TICKS(HEARTBEAT_TIMEOUT_MS)) == pdPASS) {
             
             if (is_disconnected) {
@@ -220,17 +209,14 @@ void motor_control_task(void *pvParameters) {
                 is_disconnected = false;
             }
 
-            // 执行异步平滑调速 (假设 100ms 的平滑渐变时间)
             DC_Motor_SetSpeedSmoothAsync(MOTOR_LEFT, cmd.left_speed, 100);
             DC_Motor_SetSpeedSmoothAsync(MOTOR_RIGHT, cmd.right_speed, 100);
 
         } else {
-            // 看门狗咬人：超时未收到数据！
             if (!is_disconnected) {
                 ESP_LOGW("MOTOR_TASK", "🚨 心跳超时！触发安全刹车！");
                 is_disconnected = true;
                 
-                // 触发紧急平滑停止 (比如 300ms 停稳)
                 DC_Motor_Stop(300); 
             }
         }
@@ -259,7 +245,7 @@ esp_err_t DC_Motor_Init(void)
         .clk_cfg = LEDC_AUTO_CLK};
     ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
 
-    /* If fade API is available, install fade function (safe to call multiple times) */
+    /* Install LEDC fade interrupt service (safe to call multiple times) */
     ledc_fade_func_install(0);
 
     ledc_channel_config_t ledc_left_channel = {

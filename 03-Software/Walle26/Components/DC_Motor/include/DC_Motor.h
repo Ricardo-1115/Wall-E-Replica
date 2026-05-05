@@ -25,8 +25,8 @@ extern void motor_control_task(void *pvParameters);
 
 #define LEDC_TIMER              LEDC_TIMER_0
 #define LEDC_MODE               LEDC_LOW_SPEED_MODE
-#define LEDC_OUTPUT_LEFT_IO     (2) // Define the output GPIO for the left motor
-#define LEDC_OUTPUT_RIGHT_IO    (38) // Define the output GPIO for the right motor 
+#define LEDC_OUTPUT_LEFT_IO     (38) // Define the output GPIO for the left motor
+#define LEDC_OUTPUT_RIGHT_IO    (2) // Define the output GPIO for the right motor 
 #define LEDC_CHANNEL            LEDC_CHANNEL_0
 #define LEDC_DUTY_RES           LEDC_TIMER_13_BIT // Set duty resolution to 13 bits
 #define LEDC_FREQUENCY          (4000) // Frequency in Hertz. Set frequency at 4 kHz
@@ -66,7 +66,7 @@ typedef struct {
 
 
 
-// 初始化后初次设置速度建议使用 DC_Motor_SetSpeedSmooth 来避免突然的速度跳变引起的堵转电流峰值。
+// 初始化后初次设置速度建议使用 DC_Motor_SetSpeedSmoothAsync 来避免突然的速度跳变引起的堵转电流峰值。
 esp_err_t DC_Motor_Init(void);
 
 esp_err_t DC_Motor_Stop(uint32_t duration_ms);

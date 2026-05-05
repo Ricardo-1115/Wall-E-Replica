@@ -5,20 +5,20 @@
 #define CAM_PIN_PWDN       -1      // 电源控制脚
 #define CAM_PIN_RESET      -1      // 复位引脚
 
-#define CAM_PIN_XCLK       15
-#define CAM_PIN_SIOD       4
-#define CAM_PIN_SIOC       5
-#define CAM_PIN_Y9         16
-#define CAM_PIN_Y8         17
-#define CAM_PIN_Y7         18
-#define CAM_PIN_Y6         12
-#define CAM_PIN_Y5         10
+#define CAM_PIN_XCLK       12
+#define CAM_PIN_SIOD       48
+#define CAM_PIN_SIOC       47
+#define CAM_PIN_Y9         13
+#define CAM_PIN_Y8         11
+#define CAM_PIN_Y7         10
+#define CAM_PIN_Y6         15
+#define CAM_PIN_Y5         17
 #define CAM_PIN_Y4         8
-#define CAM_PIN_Y3         9
-#define CAM_PIN_Y2         11
-#define CAM_PIN_VSYNC      6
-#define CAM_PIN_HREF       7
-#define CAM_PIN_PCLK       13
+#define CAM_PIN_Y3         18
+#define CAM_PIN_Y2         16
+#define CAM_PIN_VSYNC      21
+#define CAM_PIN_HREF       14
+#define CAM_PIN_PCLK       9
 
 void init_camera(void){
     camera_config_t config;

@@ -2,8 +2,6 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <inttypes.h>
-#include "nvs.h"
-#include "nvs_flash.h"
 #include "esp_console.h"
 #include "argtable3/argtable3.h"
 #include "freertos/FreeRTOS.h"
@@ -24,6 +22,7 @@ static int cmd_servo_move(int argc, char **argv){
     int nerrors = arg_parse(argc, argv, (void **)&servo_args);
     if(nerrors != 0){
         arg_print_errors(stderr, servo_args.end, argv[0]);
+        return -1;
     }
 
     int channel = servo_args.channel->ival[0];
@@ -175,66 +174,6 @@ void register_servo_key(){
     esp_console_cmd_register(&cmd_servo_key_cmd);
 }
 
-static void save_joint_config_to_nvs(void){
-    nvs_handle_t my_handle;
-    // Open
-    ESP_ERROR_CHECK(nvs_open(TAG, NVS_READWRITE, &my_handle));
-
-    // Write
-    esp_err_t err = nvs_set_blob(my_handle, "walle_joint", walle_joint, sizeof(walle_joint));
-    if(err != ESP_OK){
-        ESP_LOGE(TAG, "保存 Blob 失败! 错误码: %s", esp_err_to_name(err));
-    }
-    else{
-        err = nvs_commit(my_handle);
-        if(err == ESP_OK){
-            ESP_LOGI(TAG, "关节参数已成功写入NVS.");
-        }
-    }
-
-    // Close
-    nvs_close(my_handle);
-}
-
-void load_joint_config_from_nvs(void){
-    nvs_handle_t my_handle;
-    esp_err_t err;
-
-    // 1. 打开 NVS, 模式为只读
-    err = nvs_open(TAG, NVS_READONLY, &my_handle);
-    if(err != ESP_OK){
-        ESP_LOGW(TAG, "NVS尚未初始化或没有数据，将使用默认数据！");
-        return;
-    }
-
-    size_t require_size = 0;
-    // 2. 第一次调用nvs_get_blob：传入 NULL 获取保存在 NVS 的数据长度
-    err = nvs_get_blob(my_handle, "walle_joint", NULL, &require_size);
-    if(err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND){
-        ESP_LOGE(TAG, "读取 nvs 数据长度失败");
-        nvs_close(my_handle);
-        return;
-    }
-
-    // 3. 检查有没有找到数据， 并且数据长度是否与我们现在结构体数组大小一致
-    if(require_size == sizeof(walle_joint)){
-        // 4. 第二次调用 nvs_get_blob, 真正把数据读取到 walle_joint 数组中
-        err = nvs_get_blob(my_handle, "walle_joint", walle_joint, &require_size);
-        if(err == ESP_OK){
-            ESP_LOGI(TAG, "成功从 NVS 加载了7个关节的配置参数");
-        }
-    }
-    else if(require_size > 0){
-        ESP_LOGE(TAG, "NVS 中的数据大小(%d)与当前结构体大小(%d)不匹配！放弃读取，使用默认值", require_size, sizeof(walle_joint));
-    }
-    else{
-        ESP_LOGI(TAG, "NVS 中没有找到关节配置数据，使用代码中的默认初始化值。");
-    }
-
-    // 5. 关闭句柄
-    nvs_close(my_handle);
-}
-
 static struct {
     struct arg_int *channel;
     struct arg_dbl *min_angle;
@@ -251,7 +190,7 @@ static int cmd_servo_calib(int argc, char **argv){
     }
     
     int channel = servo_calib.channel->ival[0];
-    if(channel < 0 || channel > 15){
+    if(channel < 0 || channel > 6){
         ESP_LOGE(TAG, "无效的通道号: %d. 机器人关节编号必须是 0 到 6.", channel);
         return -1;
     }

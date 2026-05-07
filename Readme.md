@@ -46,7 +46,7 @@
 ### 内部布线 —— 电源分配板与主控板
 
 <p align="center">
-  <img src="./05-Assets/current_internal_wiring.jpg" width="70%" />
+  <img src="./05-Assets/12V3路电源分配板.jpg" width="70%" />
 </p>
 
 ### 3D 打印表面处理
@@ -187,9 +187,7 @@
 ```
 
 **参考文档：**
-- Texas Instruments, *SPRAAS1B — Hardware Design Guidelines for TMS320F28xx and TMS320F28xx DSCs* (Section 3.7: Ground Plane)
-- Texas Instruments, *SLYT499 — Grounding in Mixed-Signal Systems Demystified, Part 1*
-- Texas Instruments, *SLYT512 — Grounding in Mixed-Signal Systems Demystified, Part 2*
+- Texas Instruments, *SPRAAS1B — Hardware Design Guidelines for TMS320F28xx and TMS320F28xx DSCs*
 
 ---
 
@@ -417,7 +415,6 @@ WallE_Graduation/
 
 - **Espressif ESP-IDF**: 乐鑫官方物联网开发框架，提供 FreeRTOS、驱动库、协议栈等完整支持。
 - **TI SPRAAS1B** — *Hardware Design Guidelines for TMS320F28xx and TMS320F28xx DSCs*
-- **TI SLYT499 / SLYT512** — *Grounding in Mixed-Signal Systems Demystified*
 
 ### 开源组件
 

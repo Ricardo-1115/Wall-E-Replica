@@ -1,5 +1,4 @@
-#ifndef DC_MOTOR_H
-#define DC_MOTOR_H
+#pragma once
 
 #include <stdio.h>
 #include <stdlib.h> 
@@ -32,10 +31,10 @@ extern void motor_control_task(void *pvParameters);
 #define LEDC_FREQUENCY          (4000) // Frequency in Hertz. Set frequency at 4 kHz
 
 
-#define DC_Motor_LEFT_GPIO_1 GPIO_NUM_39
-#define DC_Motor_LEFT_GPIO_2 GPIO_NUM_40
-#define DC_Motor_RIGHT_GPIO_1 GPIO_NUM_41
-#define DC_Motor_RIGHT_GPIO_2 GPIO_NUM_42
+#define DC_MOTOR_LEFT_GPIO_1 GPIO_NUM_39
+#define DC_MOTOR_LEFT_GPIO_2 GPIO_NUM_40
+#define DC_MOTOR_RIGHT_GPIO_1 GPIO_NUM_41
+#define DC_MOTOR_RIGHT_GPIO_2 GPIO_NUM_42
 #define MOTOR_SPEED_MIN -100
 #define MOTOR_SPEED_MAX 100
 
@@ -73,4 +72,3 @@ esp_err_t DC_Motor_Stop(uint32_t duration_ms);
 esp_err_t DC_Motor_SetSpeedSmoothAsync(motor_id_t motor_id, int8_t target_speed, uint32_t duration_ms);
 
 
-#endif // DC_MOTOR_H

@@ -3,8 +3,8 @@
 static motor_control_t motors[2] = {
     {.id = MOTOR_LEFT,
      .channel = LEDC_CHANNEL,
-     .gpio1 = DC_Motor_LEFT_GPIO_1,
-     .gpio2 = DC_Motor_LEFT_GPIO_2,
+     .gpio1 = DC_MOTOR_LEFT_GPIO_1,
+     .gpio2 = DC_MOTOR_LEFT_GPIO_2,
      .state = MOTOR_STATE_IDLE,
      .current_speed = 0,
      .target_speed = 0,
@@ -14,8 +14,8 @@ static motor_control_t motors[2] = {
 
     {.id = MOTOR_RIGHT,
      .channel = LEDC_CHANNEL + 1,
-     .gpio1 = DC_Motor_RIGHT_GPIO_1,
-     .gpio2 = DC_Motor_RIGHT_GPIO_2,
+     .gpio1 = DC_MOTOR_RIGHT_GPIO_1,
+     .gpio2 = DC_MOTOR_RIGHT_GPIO_2,
      .state = MOTOR_STATE_IDLE,
      .current_speed = 0,
      .target_speed = 0,
@@ -229,10 +229,10 @@ esp_err_t DC_Motor_Init(void)
         .intr_type = GPIO_INTR_DISABLE,
         .mode = GPIO_MODE_INPUT_OUTPUT,
         /* OR together each pin mask separately to avoid operator precedence bugs */
-        .pin_bit_mask = (1ULL << DC_Motor_LEFT_GPIO_1) |
-                        (1ULL << DC_Motor_LEFT_GPIO_2) |
-                        (1ULL << DC_Motor_RIGHT_GPIO_1) |
-                        (1ULL << DC_Motor_RIGHT_GPIO_2),
+        .pin_bit_mask = (1ULL << DC_MOTOR_LEFT_GPIO_1) |
+                        (1ULL << DC_MOTOR_LEFT_GPIO_2) |
+                        (1ULL << DC_MOTOR_RIGHT_GPIO_1) |
+                        (1ULL << DC_MOTOR_RIGHT_GPIO_2),
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .pull_up_en = GPIO_PULLUP_DISABLE};
     ESP_ERROR_CHECK(gpio_config(&io_conf));
@@ -271,10 +271,10 @@ esp_err_t DC_Motor_Init(void)
     /*
      * 设置方向引脚的初始电平为安全状态（都拉低），避免上电时 H 桥处于未定义状态。
      */
-    gpio_set_level(DC_Motor_LEFT_GPIO_1, 0);
-    gpio_set_level(DC_Motor_LEFT_GPIO_2, 0);
-    gpio_set_level(DC_Motor_RIGHT_GPIO_1, 0);
-    gpio_set_level(DC_Motor_RIGHT_GPIO_2, 0);
+    gpio_set_level(DC_MOTOR_LEFT_GPIO_1, 0);
+    gpio_set_level(DC_MOTOR_LEFT_GPIO_2, 0);
+    gpio_set_level(DC_MOTOR_RIGHT_GPIO_1, 0);
+    gpio_set_level(DC_MOTOR_RIGHT_GPIO_2, 0);
 
     ledc_cbs_t callbacks = {
         .fade_cb = motor_fade_cb};
@@ -373,20 +373,20 @@ esp_err_t DC_Motor_Init(void)
 //         if (speed > 0)
 //         {
 //             /* forward rotation */
-//             gpio_set_level(DC_Motor_LEFT_GPIO_1, 1);
-//             gpio_set_level(DC_Motor_LEFT_GPIO_2, 0);
+//             gpio_set_level(DC_MOTOR_LEFT_GPIO_1, 1);
+//             gpio_set_level(DC_MOTOR_LEFT_GPIO_2, 0);
 //         }
 //         else if (speed < 0)
 //         {
 //             /* reverse rotation */
-//             gpio_set_level(DC_Motor_LEFT_GPIO_1, 0);
-//             gpio_set_level(DC_Motor_LEFT_GPIO_2, 1);
+//             gpio_set_level(DC_MOTOR_LEFT_GPIO_1, 0);
+//             gpio_set_level(DC_MOTOR_LEFT_GPIO_2, 1);
 //         }
 //         else
 //         {
 //             /* zero speed; leave both direction pins low for safety */
-//             gpio_set_level(DC_Motor_LEFT_GPIO_1, 0);
-//             gpio_set_level(DC_Motor_LEFT_GPIO_2, 0);
+//             gpio_set_level(DC_MOTOR_LEFT_GPIO_1, 0);
+//             gpio_set_level(DC_MOTOR_LEFT_GPIO_2, 0);
 //         }
 
 //         /* compute duty cycle from speed percentage and update channel */
@@ -402,18 +402,18 @@ esp_err_t DC_Motor_Init(void)
 //     {
 //         if (speed > 0)
 //         {
-//             gpio_set_level(DC_Motor_RIGHT_GPIO_1, 1);
-//             gpio_set_level(DC_Motor_RIGHT_GPIO_2, 0);
+//             gpio_set_level(DC_MOTOR_RIGHT_GPIO_1, 1);
+//             gpio_set_level(DC_MOTOR_RIGHT_GPIO_2, 0);
 //         }
 //         else if (speed < 0)
 //         {
-//             gpio_set_level(DC_Motor_RIGHT_GPIO_1, 0);
-//             gpio_set_level(DC_Motor_RIGHT_GPIO_2, 1);
+//             gpio_set_level(DC_MOTOR_RIGHT_GPIO_1, 0);
+//             gpio_set_level(DC_MOTOR_RIGHT_GPIO_2, 1);
 //         }
 //         else
 //         {
-//             gpio_set_level(DC_Motor_RIGHT_GPIO_1, 0);
-//             gpio_set_level(DC_Motor_RIGHT_GPIO_2, 0);
+//             gpio_set_level(DC_MOTOR_RIGHT_GPIO_1, 0);
+//             gpio_set_level(DC_MOTOR_RIGHT_GPIO_2, 0);
 //         }
 
 //         uint32_t duty = calculate_duty(speed);

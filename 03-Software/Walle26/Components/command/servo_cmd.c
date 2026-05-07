@@ -1,4 +1,4 @@
-#include "Servo.h"
+#include "PCA9685.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <inttypes.h>
@@ -37,7 +37,7 @@ static int cmd_servo_move(int argc, char **argv){
     }
     uint32_t duration_ms = (uint32_t)servo_args.duration_ms->ival[0];
 
-    walle_move_servo(channel, angle, duration_ms);
+    walle_servo_set_angle(channel, angle, duration_ms);
     ESP_LOGI(TAG, "Moving servo %d to %.2f degrees over %" PRIu32 " ms", channel, angle, duration_ms);
     return 0;
 }
@@ -82,10 +82,10 @@ static int cmd_servo_key(int argc, char **argv){
         return -1;
     }
 
-    // Initialize servo to 90 degrees as starting position
-    float current_angle = 90.0f;
+    // Initialize servo to its default angle as starting position
+    float current_angle = get_servo_angle(channel);
     pca9685_set_angle(channel, current_angle);
-    ESP_LOGI(TAG, "Servo %d initialized to %.1f degrees. Use 'W' to increase, 'S' to decrease, 'A' to increase by 10, 'D' to decrease by 10, 'Q' to quit.", channel, current_angle);
+    ESP_LOGI(TAG, "Servo %d started at default %.1f degrees. W:+1 S:-1 A:+10 D:-10 Q:quit", channel, current_angle);
 
     // Main control loop for keyboard input
     char input_buffer[10];  // Buffer for user input
@@ -145,9 +145,9 @@ static int cmd_servo_key(int argc, char **argv){
         }
         // Handle 'Q' key: quit the control loop
         else if(ch == 'Q' || ch == 'q') {
-            current_angle = 90.0f;
-            pca9685_set_angle(channel, current_angle); // Reset to neutral position before exiting
-            ESP_LOGI(TAG, "Exiting servo key control, resetting angle to 90 degrees.");
+            current_angle = get_servo_angle(channel);
+            pca9685_set_angle(channel, current_angle); // Reset to default angle before exiting
+            ESP_LOGI(TAG, "Exiting servo key control, reset to default %.1f degrees.", current_angle);
             break;
         }
         // Handle invalid keys
@@ -190,8 +190,8 @@ static int cmd_servo_calib(int argc, char **argv){
     }
     
     int channel = servo_calib.channel->ival[0];
-    if(channel < 0 || channel > 6){
-        ESP_LOGE(TAG, "无效的通道号: %d. 机器人关节编号必须是 0 到 6.", channel);
+    if(channel < 0 || channel >= JOINT_COUNT){
+        ESP_LOGE(TAG, "无效的通道号: %d. 机器人关节编号必须是 0 到 %d.", channel, JOINT_COUNT - 1);
         return -1;
     }
     float min_angle = (float)servo_calib.min_angle->dval[0];
@@ -213,7 +213,7 @@ static int cmd_servo_calib(int argc, char **argv){
         ESP_LOGI(TAG, "参数已保存至 NVS. 当前关节配置表：");
         ESP_LOGI(TAG, "----------------------------------------");
         ESP_LOGI(TAG, " ID |  Min  |  Max  | Reverse ");
-        for(int i = 0; i < 7; i++){
+        for(int i = 0; i < JOINT_COUNT; i++){
             ESP_LOGI(TAG, " %2d | %5.1f | %5.1f |   %d", 
                      i, walle_joint[i].min_angle, walle_joint[i].max_angle, walle_joint[i].reverse);
         }
@@ -232,7 +232,7 @@ void register_servo_calib(void){
 
     const esp_console_cmd_t servo_calib_cmd = {
         .command = "servo_calib",
-        .help = "Calibrate servo joint limits and reverse flag, optionally save to NVS", // 更新了正规的帮助信息
+        .help = "Calibrate servo joint limits and reverse flag, optionally save to NVS",
         .hint = NULL,
         .func = cmd_servo_calib,
         .argtable = &servo_calib

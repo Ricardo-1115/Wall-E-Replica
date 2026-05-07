@@ -61,8 +61,8 @@ void register_system_common(void)
 
 /* 'hello' command — system diagnostics and WALL-E startup banner */
 static int cmd_hello(int argc, char **argv){
-    // 1. 灵魂注入：BnL 启动画面
-   printf("\n\e[0;33m"); // 设置终端字体颜色为黄色
+    // 1. BnL 启动画面
+   printf("\n\e[0;33m");
     printf("  ____                 _   _   _                          \n");
     printf(" |  _ \\               | \\ | | | |                         \n");
     printf(" | |_) |_   _ _   _   |  \\| | | |     __ _ _ __ __ _  ___ \n");
@@ -72,29 +72,28 @@ static int cmd_hello(int argc, char **argv){
     printf("               __/ |                            __/ |     \n");
     printf("              |___/                            |___/      \n");
     printf("     Buy n Large Corporation OS v2.0                      \n");
-    printf("\e[0m\n"); // 恢复默认颜色
+    printf("\e[0m\n");
 
     printf("      [o_o]   <- W.A.L.L.-E UNIT ACTIVE\n");
     printf("     /|___|\\  \n");
     printf("      d   b   \n\n");
 
-    // 2. 获取芯片、Flash 和系统运行时间信息
+    // 2. 硬件信息
     esp_chip_info_t chip_info;
     uint32_t flash_size;
     esp_chip_info(&chip_info);
     if(esp_flash_get_size(NULL, &flash_size) != ESP_OK) {
         flash_size = 0;
     }
-    
-    // 计算 Uptime
+
     uint64_t uptime_sec = esp_timer_get_time() / 1000000;
     uint32_t h = uptime_sec / 3600;
     uint32_t m = (uptime_sec % 3600) / 60;
     uint32_t s = uptime_sec % 60;
 
-    // 3. 打印系统诊断报告 
+    // 3. 系统诊断报告
     printf("\e[0;36m=== BnL UNIT W.A.L.L.-E : SYSTEM DIAGNOSTICS ===\e[0m\n");
-    
+
     // 基础硬件层
     printf("[\e[0;32mOK\e[0m] Core Brain   : ESP32-S3 (Cores: %d, Rev: %d)\n", chip_info.cores, chip_info.revision);
     printf("[\e[0;32mOK\e[0m] Firmware OS  : ESP-IDF %s\n", esp_get_idf_version());
@@ -102,19 +101,27 @@ static int cmd_hello(int argc, char **argv){
     printf("[\e[0;32mOK\e[0m] Memory Status: %" PRIu32 " Bytes Free / Min: %" PRIu32 "\n", esp_get_free_heap_size(), esp_get_minimum_free_heap_size());
     printf("[\e[0;32mOK\e[0m] Flash Drive  : %" PRIu32 " MB %s\n", flash_size / (1024 * 1024), (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "Embedded" : "External");
     printf("[\e[0;32mOK\e[0m] Sys Uptime   : %02" PRIu32 ":%02" PRIu32 ":%02" PRIu32 "\n", h, m, s);
-    
+
     printf("------------------------------------------------\n");
-    printf("\e[0;35m--- PERIPHERAL & SUBSYSTEM STATUS ---\e[0m\n");
-    
-    // 外设与生态层 
+    printf("\e[0;35m--- SUBSYSTEM STATUS ---\e[0m\n");
+
+    // 实际子系统状态
     printf("[\e[0;32mON\e[0m] Motor Driver : LEDC Async Fade (4kHz, 13-bit)\n");
+    printf("[\e[0;32mON\e[0m] Servo System : PCA9685 + 7 Joints (Smooth Fade)\n");
+    printf("[\e[0;32mON\e[0m] WiFi Control : Station Mode + WebSocket (port 80)\n");
+    printf("[\e[0;32mON\e[0m] Camera Stream: HTTP MJPEG (port 8081)\n");
+    printf("[\e[0;32mON\e[0m] Audio System : DFPlayerMini (UART)\n");
+    printf("[\e[0;33mOFF\e[0m] OLED Display : SSD1306 (Disabled)\n");
+
+    printf("------------------------------------------------\n");
+    printf("\e[0;35m--- BnL LEGACY REPORT ---\e[0m\n");
     printf("[\e[0;33mWARN\e[0m] Solar Array  : Disconnected [AFE Pending]\n");
     printf("[\e[0;33mWARN\e[0m] Chassis Track: Offline [Mech Assembly in Progress]\n");
     printf("[\e[0;31mFAIL\e[0m] Earth Ecology: Critical [Directive: Clean Up]\n");
-    
+
     printf("------------------------------------------------\n");
-    
-    printf("Primary Dir.   : \e[1;37mM-O-C-C (Make Our Code Clean)\e[0m\n"); 
+
+    printf("Primary Dir.   : \e[1;37mM-O-C-C (Make Our Code Clean)\e[0m\n");
     printf("\e[0;36m================================================\e[0m\n\n");
 
     ESP_LOGI("WALL-E", "Boot sequence diagnostics complete. Ready for input.\n");

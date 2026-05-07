@@ -11,12 +11,17 @@ typedef struct {
     float step_per_tick;      // 每个tick(20ms)的角度变化量
 }ServoState;
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Woverride-init"
 static ServoState servos[16] = {
-    [0 ... 15] = {.current_angle = 90.0f, .target_angle = 90.0f, .step_per_tick = 0.0f} // 初始化所有舵机状态
+    [0 ... 15] = {.current_angle = 90.0f, .target_angle = 90.0f, .step_per_tick = 0.0f},
+    [3] = {.current_angle = 30.0f, .target_angle = 30.0f, .step_per_tick = 0.0f},
 };
+#pragma GCC diagnostic pop
 
-JointConfig walle_joint[7] = {
-    [0 ... 6] = {.min_angle = 90.0f, .max_angle = 90.0f, .reverse = false}
+JointConfig walle_joint[JOINT_COUNT] = {
+    [0 ... (JOINT_COUNT - 1)] = {.min_angle = 90.0f, .max_angle = 90.0f, .reverse = false}
+
 };
 
 static const char *NVS_TAG = "NVS_JOINT";
@@ -84,9 +89,15 @@ void load_joint_config_from_nvs(void){
 static void servo_fade_task(void *pvParameters);
 static void servo_control_task(void *pvParameters);
 
+float get_servo_angle(uint8_t channel)
+{
+    if (channel > 15) return 90.0f;
+    return servos[channel].current_angle;
+}
+
 // Hardware initialization for PCA9685 on a shared I2C bus.
 // This hides PCA9685-specific details from main.c.
-esp_err_t servo_hw_init(i2c_master_bus_handle_t bus_handle)
+esp_err_t Servo_hw_Init(i2c_master_bus_handle_t bus_handle)
 {
     ESP_LOGI(TAG, "初始化 PCA9685 硬件...");
 
@@ -102,9 +113,9 @@ esp_err_t servo_hw_init(i2c_master_bus_handle_t bus_handle)
 }
 
 // Starts servo application tasks and queue. PCA9685 hardware initialization is performed by main.c before calling this function.
-void servo_app_init(void)
+void Servo_app_Init(void)
 {
-    // 1. 创建队列 (深度为2即可，只保留最新指令防积压)
+    // 1. 创建队列 
     servo_cmd_queue = xQueueCreate(1, sizeof(servo_cmd_t));
     if (servo_cmd_queue == NULL) {
         ESP_LOGE(TAG, "舵机命令队列创建失败");
@@ -121,27 +132,26 @@ void servo_app_init(void)
 }
 
 
-// 参数：通道号, 目标角度, 完成该动作期望的时间(毫秒)
-// 供上层直接调用的函数，内部会计算每个tick需要变化的角度（相当于动画的速度），然后在servo_fade_task中逐步更新当前角度并发送到PCA9685
-void walle_move_servo(uint8_t channel, float target_angle, uint32_t duration_ms){
-    if(channel > 15 || target_angle < 0.0f || target_angle > 180.0f){
-        ESP_LOGE("walle_move_servo", "Invalid channel or angle. Channel must be 0-15, angle must be 0-180.");
+// 底层舵机接口：设置 PCA9685 指定通道的目标角度，duration_ms 控制缓动时长（毫秒）
+void walle_servo_set_angle(uint8_t channel, float angle, uint32_t duration_ms){
+    if(channel > 15 || angle < 0.0f || angle > 180.0f){
+        ESP_LOGE("walle_servo_set_angle", "Invalid channel or angle. Channel must be 0-15, angle must be 0-180.");
         return;
     }
 
-    float diff = target_angle - servos[channel].current_angle;
+    float diff = angle - servos[channel].current_angle;
 
     if(duration_ms < 20){
-        // if duration is less than one tick, move immediately
+        // 小于一个 tick 周期则直接跳转
         servos[channel].step_per_tick = fabs(diff);
     }
     else{
-        // calculate step per tick based on duration
-        float steps = duration_ms / 20.0f; // 每20ms一个tick
+        // 根据时长计算每个 tick (20ms) 应转动的角度
+        float steps = duration_ms / 20.0f;
         servos[channel].step_per_tick = fabs(diff) / steps;
     }
 
-    servos[channel].target_angle = target_angle;
+    servos[channel].target_angle = angle;
 }
 
 
@@ -173,13 +183,14 @@ static void servo_fade_task(void *pvParameters){
     }
 }
 
-void walle_set_joint_move(uint8_t channel, float percentage, uint32_t duration_ms){
-    if(channel > 15 || percentage < 0 || percentage > 100){
-        ESP_LOGE(TAG, "Invalid parameters");
+// 上层关节接口：将关节百分比 (0-100) 经 JointConfig 映射为绝对角度后调 walle_servo_set_angle
+void walle_joint_move(uint8_t joint_id, float percentage, uint32_t duration_ms){
+    if(joint_id >= JOINT_COUNT || percentage < 0 || percentage > 100){
+        ESP_LOGE(TAG, "Invalid parameters: joint_id must be 0-%d, percentage must be 0-100", JOINT_COUNT - 1);
         return;
     }
 
-    JointConfig cfg = walle_joint[channel];
+    JointConfig cfg = walle_joint[joint_id];
     float joint_angle_target = 90.0f;
     float joint_angle_range = 0.0f;
 
@@ -192,18 +203,16 @@ void walle_set_joint_move(uint8_t channel, float percentage, uint32_t duration_m
         joint_angle_target = (cfg.max_angle - percentage / 100.0f * joint_angle_range);
     }
 
-    walle_move_servo(channel, joint_angle_target, duration_ms);
+    walle_servo_set_angle(joint_id, joint_angle_target, duration_ms);
 }
 
 // 处理来自 WiFi/自动脚本 队列的数据任务
 static void servo_control_task(void *pvParameters) {
     servo_cmd_t cmd;
     while(1) {
-        // 阻塞等待队列数据
         if (xQueueReceive(servo_cmd_queue, &cmd, portMAX_DELAY) == pdTRUE) {
-            // 收到指令后，循环遍历 7 个关节，将百分比和特定的持续时间设置下去
-            for (uint8_t i = 0; i < 7; i++) {
-                walle_set_joint_move(i, cmd.percentages[i], cmd.duration_ms); 
+            for (uint8_t i = 0; i < JOINT_COUNT; i++) {
+                walle_joint_move(i, cmd.percentages[i], cmd.duration_ms);
             }
         }
     }

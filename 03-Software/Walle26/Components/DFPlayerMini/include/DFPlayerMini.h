@@ -14,8 +14,8 @@ extern "C"
 
 	// Function declarations
     esp_err_t DFPlayerMini_Init(void);
-    void DFPlayerMini_play_folder(uint8_t folder, uint8_t file);
-    void DFPlayerMini_set_volume(uint8_t volume);
+    void DFPlayerMini_PlayFolder(uint8_t folder, uint8_t file);
+    void DFPlayerMini_SetVolume(uint8_t volume);
 
 #ifdef __cplusplus
 }

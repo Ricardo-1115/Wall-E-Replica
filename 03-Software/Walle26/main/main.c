@@ -145,7 +145,7 @@ static esp_err_t init_servo_hardware(void)
 {
     ESP_LOGI(TAG, "初始化舵机硬件...");
 
-    esp_err_t err = servo_hw_init(g_i2c_bus_handle);
+    esp_err_t err = Servo_hw_Init(g_i2c_bus_handle);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "舵机硬件初始化失败: %s", esp_err_to_name(err));
         return err;
@@ -163,10 +163,10 @@ static void init_i2c_devices(void)
         return;
     }
 
-    if (init_oled_display() != ESP_OK) {
-        ESP_LOGE(TAG, "OLED 初始化失败");
-        // 继续运行，不影响其他功能
-    }
+    // if (init_oled_display() != ESP_OK) {
+    //     ESP_LOGE(TAG, "OLED 初始化失败");
+    //     // 继续运行，不影响其他功能
+    // }
 
     if (init_servo_hardware() != ESP_OK) {
         ESP_LOGE(TAG, "舵机硬件初始化失败");
@@ -188,7 +188,7 @@ void app_main(void)
 
     initialize_nvs();
     // 初始化 I2C 设备和总线
-    // init_i2c_devices();
+    init_i2c_devices();
     
     DFPlayerMini_Init();
     init_camera();
@@ -204,7 +204,7 @@ void app_main(void)
     // 创建独立运行的电机控制任务
     xTaskCreatePinnedToCore(motor_control_task, "motor_ctrl_task", 4096, NULL, 15, NULL, 1);
     // 初始化舵机控制系统
-    servo_app_init();
+    Servo_app_Init();
 
 #if CONFIG_CONSOLE_STORE_HISTORY
     initialize_filesystem();

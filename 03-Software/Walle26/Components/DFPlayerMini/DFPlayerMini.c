@@ -79,14 +79,14 @@ static void send_cmd(uint8_t cmd, uint16_t param)
 }
 
 // 调整音量
-void DFPlayerMini_set_volume(uint8_t volume)
+void DFPlayerMini_SetVolume(uint8_t volume)
 {
     volume = volume > 30 ? 30 : volume; // DFPlayer 的音量范围是 0-30
     send_cmd(0x06, volume);
 }
 
 // 指定文件夹播放
-void DFPlayerMini_play_folder(uint8_t folder, uint8_t file)
+void DFPlayerMini_PlayFolder(uint8_t folder, uint8_t file)
 {
     uint16_t param = ((folder & 0xFF) << 8) | (file & 0xFF);
     send_cmd(0x0F, param);

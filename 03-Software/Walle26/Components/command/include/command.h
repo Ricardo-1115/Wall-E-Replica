@@ -15,8 +15,6 @@ extern "C"
     void register_motor_stop(void);
     void register_dfplayer_play_folder(void);
 
-    void load_joint_config_from_nvs(void);
-
 #ifdef __cplusplus
 }
 #endif

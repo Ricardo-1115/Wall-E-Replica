@@ -36,8 +36,8 @@ static int play_folder_cmd(int argc, char **argv)
         return 1;
     }
     ESP_LOGI(TAG, "Playing folder %d, file %d with volume %d\n", folder, file, volume);
-    DFPlayerMini_set_volume((uint8_t)volume);
-    DFPlayerMini_play_folder((uint8_t)folder, (uint8_t)file);
+    DFPlayerMini_SetVolume((uint8_t)volume);
+    DFPlayerMini_PlayFolder((uint8_t)folder, (uint8_t)file);
 
     return 0;
 

@@ -188,7 +188,7 @@
 ```
 
 **参考文档：**
-- Texas Instruments, *SPRAAS1B — Hardware Design Guidelines for TMS320F28xx and TMS320F28xx DSCs*
+- [Split Ground Planes — The Most Persuasive Argument Yet](https://hott.shielddigitaldesign.com/techtips/split-gnd-plane.html)
 
 ---
 

@@ -13,10 +13,10 @@
 - [项目背景](#项目背景)
 - [实物展示](#实物展示)
 - [系统架构总览](#系统架构总览)
-- [主控电路设计 —— 六次迭代的血泪史](#主控电路设计--六次迭代的血泪史)
+- [主控电路设计思路演进](#主控电路设计思路演进)
 - [固件架构](#固件架构)
 - [功能演示](#功能演示)
-- [当前进展与路线图](#当前进展与路线图)
+- [当前进展与规划](#当前进展与规划)
 - [项目文件结构](#项目文件结构)
 - [引用与致谢](#引用与致谢)
 
@@ -26,14 +26,12 @@
 
 本项目是我的本科毕业设计，目标是以 **ESP32-S3** 为主控芯片，深度复刻皮克斯经典角色 **WALL-E**。
 
-与市面上 Arduino 原型机不同，本项目追求 **工程完整性**：
-
 - 自研 12V 三路隔离电源分配板 + 主控 PCB
 - 固件基于 ESP-IDF 原生框架，组件化架构
 - 通信采用 WebSocket 全双工协议
-- 支持 640x480 MJPEG 实时图传 + 运动控制
+- 支持 640x480 MJPEG 实时图传 + 全向运动控制 + 音频交互
 
-> 从**螺丝钉**到**WebSocket 数据帧**，全部亲手完成。
+> 从 **螺丝钉** 到 **WebSocket 数据帧**，全部亲手完成。
 
 ---
 
@@ -78,7 +76,6 @@
 │  │                         ├→ motor_cmd_queue ←→ motor   │   │
 │  │                         │                   Task      │   │
 │  │  HTTP Server ─→ stream_handle (MJPEG)                  │   │
-│  │                                                        │   │
 │  │  CLI Console (串口调试命令)                             │   │
 │  └──────────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────┘
@@ -95,7 +92,7 @@
 
 ---
 
-## 主控电路设计 —— 六次迭代的血泪史
+## 主控电路设计思路演进
 
 > 这是本项目的**核心难点**：如何处理电机/舵机感性负载对主控芯片的传导干扰。
 
@@ -124,8 +121,6 @@
 **【思路】**
 
 从物理层面彻底斩断连通。引入高速数字隔离器（ISO7741）和双向 I²C 隔离器（ADuM1250）。
-
-**【技术解析】**
 
 隔离芯片内部通过电容/磁场耦合传递信号，两端地完全绝缘。电机的地弹被隔离墙挡在外面。
 
@@ -162,11 +157,13 @@
 
 ---
 
-### 阶段四：阻抗魔法 —— 缩颈铜桥 (Neck Bridge) 诞生
+### 阶段四：阻抗魔法 —— 缩颈铜桥 (Neck Bridge)
 
 **【思路】**
 
 废除 0Ω 电阻。在护城河中间保留一段 4~5mm 宽的**顶底双层纯铜皮**，作为两区唯一的物理连接点。
+
+此方案参考了 TI 混合信号 PCB 接地设计文档中关于 **单点接地（Single-Point Connection）** 与 **地平面分割（Split Ground Plane）** 的相关论述：两区地平面必须仅通过一个物理点连接，且所有跨区信号必须紧贴该连接点走线。
 
 **【为什么桥能挡住噪声？】**
 
@@ -188,6 +185,11 @@
                      ↑
              噪声到桥头 → 阻抗太大 → 折返
 ```
+
+**参考文档：**
+- Texas Instruments, *SPRAAS1B — Hardware Design Guidelines for TMS320F28xx and TMS320F28xx DSCs* (Section 3.7: Ground Plane)
+- Texas Instruments, *SLYT499 — Grounding in Mixed-Signal Systems Demystified, Part 1*
+- Texas Instruments, *SLYT512 — Grounding in Mixed-Signal Systems Demystified, Part 2*
 
 ---
 
@@ -213,7 +215,7 @@
 
 ### 阶段六：信号级修边 —— 源端阻抗匹配与逻辑加固
 
-在底层架构无懈可击后，对外围接口做最后加固：
+在底层架构确定后，对外围接口做最后加固：
 
 | 措施 | 位置 | 作用 |
 |------|------|------|
@@ -273,7 +275,7 @@
 │  │   ├── nvs_cmd.c      —— NVS 读写      │
 │  │   └── system.c       —— 系统诊断      │
 │  │                                      │
-│  └── display/    OLED 显示 (预留)        │
+│  └── display/    OLED 显示               │
 └─────────────────────────────────────────┘
 ```
 
@@ -331,14 +333,14 @@
 通过浏览器访问 `http://<ESP32-IP>:8081/stream` 获取 640x480 @ 15FPS 实时视频流：
 
 ```text
-📹 stream-demo.mp4
+stream-demo.mp4
 ```
 
 ### 运动控制
 
 ```text
-🎬 current_walle_activity_demo1.mp4  — 履带运动 + 关节动作
-🎬 current_walle_activity_demo2.mp4  — 多关节协同运动
+current_walle_activity_demo1.mp4  — 履带运动 + 关节动作
+current_walle_activity_demo2.mp4  — 多关节协同运动
 ```
 
 ### CLI 控制台命令
@@ -356,33 +358,25 @@
 
 ---
 
-## 当前进展与路线图
+## 当前进展与规划
 
 ### 已实现 ✅
 
 - [x] 主控 PCB 设计、打样与焊接验证
 - [x] 12V 三路隔离电源分配板
 - [x] 电机驱动（LEDC 异步渐变 + 心跳安全刹车）
-- [x] 舵机控制（PCA9685 + 7 关节平滑动画）
-- [x] 关节参数 NVS 持久化
-- [x] WiFi Station 模式 + WebSocket 服务器
-- [x] OV2640 摄像头 MJPEG 推流
-- [x] DFPlayerMini 音频播放
-- [x] CLI 串口控制台
-- [x] OLED 显示驱动（暂禁用）
+- [x] 舵机控制（PCA9685 + 7 关节平滑动画 + NVS 参数持久化）
+- [x] WiFi Station 模式 + WebSocket 服务器 (port 80)
+- [x] OV2640 摄像头 MJPEG 推流 (port 8081)
+- [x] DFPlayerMini 音频播放（UART 串口命令）
+- [x] CLI 串口控制台（电机/舵机/音频/NVS 调试）
+- [x] OLED 显示屏驱动（SSD1306，I2C 接口）
 
 ### 进行中 🔄
 
-- [ ] WebSocket 遥测回传（电池电压、RSSI）
-- [ ] 手机/PC 端控制界面
-- [ ] 多关节动作组预设与一键执行
-- [ ] 舵机堵转检测与保护
-
-### 规划中 📋
-
-- [ ] AI 视觉识别（物体检测/追踪）
-- [ ] 自主避障导航
-- [ ] 太阳能充电管理（AFE）
+- [ ] **OLED 电量显示**：基于 ADC 采样电池电压，实时显示电量百分比
+- [ ] **动作状态机**：上电后无控制指令时，随机执行电影经典动作并同步播放 DFPlayer 原声；当收到 WebSocket 控制指令时立即退出状态机，切换至手柄/远程控制模式
+- [ ] **板载麦克风接口**：预留了麦克风硬件接口，后续可利用音频输入实现语音交互或声控触发
 
 ---
 
@@ -394,15 +388,15 @@ WallE_Graduation/
 ├── 02-Hardware/                # 硬件设计
 │   └── Power_Distribution_Board/   # 电源分配板原理图 (PDF)
 ├── 03-Software/
-│   └── Walle26/                # ESP-IDF 项目根目录 (主程序入口)
+│   └── Walle26/                # ESP-IDF 项目根目录
 │       ├── main/               # app_main 主任务
 │       ├── Components/
-│       │   ├── Servo/          # 舵机控制 (PCA9685)
-│       │   ├── DC_Motor/       # 直流电机控制
+│       │   ├── Servo/          # 舵机控制 (PCA9685 + 平滑动画)
+│       │   ├── DC_Motor/       # 直流电机 (LEDC 异步渐变)
 │       │   ├── DFPlayerMini/   # 音频播放
 │       │   ├── wifi/           # WiFi + WebSocket + 图传
 │       │   ├── command/        # CLI 命令
-│       │   └── display/        # OLED (预留)
+│       │   └── display/        # OLED 电量显示
 │       └── main/               # 启动入口
 ├── 04-Mechanical/              # 3D 打印模型 (STL)
 ├── 05-Assets/                  # 照片/视频/参考资料
@@ -419,9 +413,11 @@ WallE_Graduation/
 - **Chillibasket/walle-replica**: 本项目的机械结构基于此开源设计。
   https://github.com/chillibasket/walle-replica
 
-### 开发平台
+### 技术参考
 
 - **Espressif ESP-IDF**: 乐鑫官方物联网开发框架，提供 FreeRTOS、驱动库、协议栈等完整支持。
+- **TI SPRAAS1B** — *Hardware Design Guidelines for TMS320F28xx and TMS320F28xx DSCs*
+- **TI SLYT499 / SLYT512** — *Grounding in Mixed-Signal Systems Demystified*
 
 ### 开源组件
 
@@ -431,12 +427,10 @@ WallE_Graduation/
 
 ### 原创贡献
 
-相比于原版 Arduino 方案，本项目的核心改进：
-
-1. **平台迁移**：Arduino → ESP-IDF，从模块化拼凑升级为原生多任务架构
-2. **抗干扰电源设计**：自研隔离电源分配板 + 缩颈铜桥 PCB 布局，彻底解决电机地弹问题
+1. **平台迁移**：从 Arduino 模块化拼凑升级为 ESP-IDF 原生多任务架构
+2. **抗干扰电源设计**：自研隔离电源分配板 + 缩颈铜桥 PCB 布局，解决电机地弹问题
 3. **通信协议优化**：HTTP 轮询 → WebSocket 全双工 JSON 协议，控制延迟降至 200ms 以内
-4. **全方位功能集成**：图传、运动、音频、CLI 调试集成于单一 ESP32-S3 芯片
+4. **全方位功能集成**：图传、运动控制、音频播放、CLI 调试集成于单一 ESP32-S3 芯片
 
 ---
 

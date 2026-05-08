@@ -47,7 +47,8 @@
 ### 内部布线 —— 电源分配板与主控板
 
 <p align="center">
-  <img src="./05-Assets/12V3路电源分配板.jpg" width="70%" />
+  <img src="./05-Assets/12V3路电源分配板.jpg" width="45%" />
+  <img src="./05-Assets/internal_wiring.jpg" width="45%" />
 </p>
 
 ### 3D 打印表面处理

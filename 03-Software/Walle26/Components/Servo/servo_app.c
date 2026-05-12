@@ -8,14 +8,16 @@ static const char *TAG = "SERVO_APP";
 typedef struct {
     float current_angle;      // 当前角度
     float target_angle;       // 目标角度
-    float step_per_tick;      // 每个tick(20ms)的角度变化量
+    float start_angle;        // 本次运动起始角度
+    TickType_t start_tick;    // 本次运动起始 tick
+    uint32_t duration_ticks;  // 本次运动起始 tick 数
 }ServoState;
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Woverride-init"
 static ServoState servos[16] = {
-    [0 ... 15] = {.current_angle = 90.0f, .target_angle = 90.0f, .step_per_tick = 0.0f},
-    [3] = {.current_angle = 30.0f, .target_angle = 30.0f, .step_per_tick = 0.0f},
+    [0 ... 15] = {.current_angle = 90.0f, .target_angle = 90.0f},
+    [3] = {.current_angle = 30.0f, .target_angle = 30.0f},
 };
 #pragma GCC diagnostic pop
 
@@ -86,6 +88,13 @@ void load_joint_config_from_nvs(void){
     nvs_close(my_handle);
 }
 
+static float ease_in_out_quad(float t){
+    if(t <= 0.0f) return 0.0f;
+    if(t >= 1.0f) return 1.0f;
+    if(t < 0.5f) return 2.0f * t * t;
+    return -1.0f + (4.0f - 2.0f * t) * t;
+}
+
 static void servo_fade_task(void *pvParameters);
 static void servo_control_task(void *pvParameters);
 
@@ -139,47 +148,39 @@ void walle_servo_set_angle(uint8_t channel, float angle, uint32_t duration_ms){
         return;
     }
 
-    float diff = angle - servos[channel].current_angle;
+    if(servos[channel].current_angle == angle) return;
 
-    if(duration_ms < 20){
-        // 小于一个 tick 周期则直接跳转
-        servos[channel].step_per_tick = fabs(diff);
-    }
-    else{
-        // 根据时长计算每个 tick (20ms) 应转动的角度
-        float steps = duration_ms / 20.0f;
-        servos[channel].step_per_tick = fabs(diff) / steps;
-    }
+    if(duration_ms < portTICK_PERIOD_MS)
+        duration_ms = portTICK_PERIOD_MS;
 
-    servos[channel].target_angle = angle;
+    servos[channel].start_angle    = servos[channel].current_angle;
+    servos[channel].target_angle   = angle;
+    servos[channel].start_tick     = xTaskGetTickCount();
+    servos[channel].duration_ticks = pdMS_TO_TICKS(duration_ms);
 }
 
 
 
 static void servo_fade_task(void *pvParameters){
     while(1){
+        TickType_t now = xTaskGetTickCount();
         for(int i = 0; i < 16; ++i){
-            if(servos[i].current_angle != servos[i].target_angle){
-                float diff = servos[i].target_angle - servos[i].current_angle;
-                float step = servos[i].step_per_tick;
+            if(servos[i].current_angle == servos[i].target_angle)
+                continue;
 
-                if(fabs(diff) <= step){
-                    // if the remaining difference is less than one step, move directly to target
-                    servos[i].current_angle = servos[i].target_angle;
-                }
-                else if(diff > 0){
-                    // move up
-                    servos[i].current_angle += step;
-                }
-                else{
-                    // move down
-                    servos[i].current_angle -= step;
-                }
+            TickType_t elapsed = now - servos[i].start_tick;
 
-                pca9685_set_angle(i, servos[i].current_angle);
+            if(elapsed >= servos[i].duration_ticks){
+                servos[i].current_angle = servos[i].target_angle;
+            } else {
+                float t = (float)elapsed / (float)servos[i].duration_ticks;
+                t = ease_in_out_quad(t);
+                servos[i].current_angle = servos[i].start_angle
+                    + (servos[i].target_angle - servos[i].start_angle) * t;
             }
+            pca9685_set_angle(i, servos[i].current_angle);
         }
-        vTaskDelay(pdMS_TO_TICKS(20)); // 每20ms更新一次
+        vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
 
@@ -191,16 +192,14 @@ void walle_joint_move(uint8_t joint_id, float percentage, uint32_t duration_ms){
     }
 
     JointConfig cfg = walle_joint[joint_id];
-    float joint_angle_target = 90.0f;
-    float joint_angle_range = 0.0f;
+    float joint_angle_range = cfg.max_angle - cfg.min_angle;
+    float joint_angle_target;
 
     if(cfg.reverse == true){
-        joint_angle_range = cfg.max_angle - cfg.min_angle;
-        joint_angle_target = (cfg.min_angle + percentage / 100.0f * joint_angle_range);
+        joint_angle_target = cfg.min_angle + percentage / 100.0f * joint_angle_range;
     }
     else{
-        joint_angle_range = cfg.max_angle - cfg.min_angle;
-        joint_angle_target = (cfg.max_angle - percentage / 100.0f * joint_angle_range);
+        joint_angle_target = cfg.max_angle - percentage / 100.0f * joint_angle_range;
     }
 
     walle_servo_set_angle(joint_id, joint_angle_target, duration_ms);

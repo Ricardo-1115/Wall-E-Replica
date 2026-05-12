@@ -14,6 +14,8 @@ extern "C"
     void register_motor_set(void);
     void register_motor_stop(void);
     void register_dfplayer_play_folder(void);
+    void register_anim_debug(void);
+    void register_anim_idle(void);
 
 #ifdef __cplusplus
 }

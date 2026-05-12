@@ -56,3 +56,8 @@ Desktop.ini
 
 # 9. Claude 缓存
 .claude/
+
+# 10. 论文参考资料与机械设计源文件 (外部引用，不纳入跟踪)
+06-Thesis/
+04-Mechanical/**/*.stp
+04-Mechanical/**/*.step

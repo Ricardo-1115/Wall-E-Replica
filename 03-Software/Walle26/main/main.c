@@ -23,6 +23,8 @@
 #include "DFPlayerMini.h"
 #include "esp32_hw_i2c.h"
 #include "display.h"
+#include "battery.h"
+#include "animation_engine.h"
 
 
 
@@ -114,7 +116,7 @@ static u8g2_esp32_i2c_ctx_t g_oled_i2c_ctx = {
     .cfg = U8G2_ESP32_I2C_CONFIG_DEFAULT(),
 };
 
-static esp_err_t init_oled_display(void)
+static esp_err_t __attribute__((unused)) init_oled_display(void)
 {
     ESP_LOGI(TAG, "初始化 U8G2 OLED...");
 
@@ -163,10 +165,10 @@ static void init_i2c_devices(void)
         return;
     }
 
-    // if (init_oled_display() != ESP_OK) {
-    //     ESP_LOGE(TAG, "OLED 初始化失败");
-    //     // 继续运行，不影响其他功能
-    // }
+    if (init_oled_display() != ESP_OK) {
+        ESP_LOGE(TAG, "OLED 初始化失败");
+        // 继续运行，不影响其他功能
+    }
 
     if (init_servo_hardware() != ESP_OK) {
         ESP_LOGE(TAG, "舵机硬件初始化失败");
@@ -189,10 +191,14 @@ void app_main(void)
     initialize_nvs();
     // 初始化 I2C 设备和总线
     init_i2c_devices();
+
+    // 初始化电池电压监测
+    battery_init();
     
     DFPlayerMini_Init();
-    init_camera();
+    DFPlayerMini_SetVolume(15);     /* 统一音量 */
     wifi_init();
+    init_camera();
 
     DC_Motor_Init();
     motor_cmd_queue = xQueueCreate(1, sizeof(motor_cmd_t));
@@ -205,6 +211,9 @@ void app_main(void)
     xTaskCreatePinnedToCore(motor_control_task, "motor_ctrl_task", 4096, NULL, 15, NULL, 1);
     // 初始化舵机控制系统
     Servo_app_Init();
+    // 初始化动画引擎
+    anim_engine_init();
+    anim_engine_enable_idle(true);   // 默认开启空闲微表情
 
 #if CONFIG_CONSOLE_STORE_HISTORY
     initialize_filesystem();
@@ -226,6 +235,8 @@ void app_main(void)
     register_servo_key();
     register_servo_calib();
     register_dfplayer_play_folder();
+    register_anim_debug();
+    register_anim_idle();
 
 #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
     esp_console_dev_uart_config_t hw_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
@@ -245,9 +256,12 @@ void app_main(void)
 
     ESP_ERROR_CHECK(esp_console_start_repl(repl));
 
-    // example_demo_oled_ui();
+    // 主循环：每 2 秒刷新 OLED 显示电池电量
     while(1) {
-        vTaskDelay(pdMS_TO_TICKS(500));
+        uint32_t mv = battery_get_voltage_mv();
+        uint8_t pct = battery_get_percentage();
+        display_battery_show(pct, mv);  /* 接上 OLED 后取消注释 */
+        vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
 

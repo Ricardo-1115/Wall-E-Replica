@@ -26,13 +26,6 @@ extern "C"
 {
 #endif
 
-typedef struct {
-    float max_angle;          // 组装后的最大角度
-    float min_angle;          // 组装后的最小角度
-    bool reverse;             // 是否需要反向
-} JointConfig;
-
-
 	// Function declarations
 	// 使用外部 I2C 总线初始化（支持一主多从）
 	esp_err_t pca9685_init_with_bus(i2c_master_bus_handle_t bus_handle);

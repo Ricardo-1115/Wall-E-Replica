@@ -17,6 +17,7 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "command.h"
+#include "camera_app.h"
 #include "DC_Motor.h"
 #include "Servo_app.h"
 #include "wifi.h"
@@ -25,6 +26,7 @@
 #include "display.h"
 #include "battery.h"
 #include "animation_engine.h"
+#include "energy_manager.h"
 
 
 
@@ -39,7 +41,7 @@
 #endif
 #endif
 
-static const char* TAG = "example";
+static const char* TAG = "WALL-E";
 #define PROMPT_STR CONFIG_IDF_TARGET
 
 
@@ -116,7 +118,7 @@ static u8g2_esp32_i2c_ctx_t g_oled_i2c_ctx = {
     .cfg = U8G2_ESP32_I2C_CONFIG_DEFAULT(),
 };
 
-static esp_err_t __attribute__((unused)) init_oled_display(void)
+static esp_err_t init_oled_display(void)
 {
     ESP_LOGI(TAG, "初始化 U8G2 OLED...");
 
@@ -128,7 +130,7 @@ static esp_err_t __attribute__((unused)) init_oled_display(void)
     }
 
     // 设置 U8G2 外观
-    u8g2_Setup_ssd1306_i2c_128x64_noname_f(&u8g2, U8G2_R0,
+    u8g2_Setup_ssd1306_i2c_128x64_noname_f(&u8g2, U8G2_R1,
         u8x8_byte_esp32_hw_i2c, u8x8_gpio_and_delay_esp32_i2c);
 
     // 初始化显示屏
@@ -165,10 +167,10 @@ static void init_i2c_devices(void)
         return;
     }
 
-    if (init_oled_display() != ESP_OK) {
-        ESP_LOGE(TAG, "OLED 初始化失败");
-        // 继续运行，不影响其他功能
-    }
+    // if (init_oled_display() != ESP_OK) {
+    //     ESP_LOGE(TAG, "OLED 初始化失败");
+    //     // 继续运行，不影响其他功能
+    // }
 
     if (init_servo_hardware() != ESP_OK) {
         ESP_LOGE(TAG, "舵机硬件初始化失败");
@@ -213,7 +215,8 @@ void app_main(void)
     Servo_app_Init();
     // 初始化动画引擎
     anim_engine_init();
-    anim_engine_enable_idle(true);   // 默认开启空闲微表情
+    anim_engine_enable_idle(false);   // 能量管理器接管空闲行为控制
+    energy_manager_init();           // 启动能量管理系统
 
 #if CONFIG_CONSOLE_STORE_HISTORY
     initialize_filesystem();
@@ -237,6 +240,7 @@ void app_main(void)
     register_dfplayer_play_folder();
     register_anim_debug();
     register_anim_idle();
+    register_motor_ripple_test();
 
 #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
     esp_console_dev_uart_config_t hw_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
@@ -258,9 +262,9 @@ void app_main(void)
 
     // 主循环：每 2 秒刷新 OLED 显示电池电量
     while(1) {
-        uint32_t mv = battery_get_voltage_mv();
-        uint8_t pct = battery_get_percentage();
-        display_battery_show(pct, mv);  /* 接上 OLED 后取消注释 */
+        // uint32_t mv = battery_get_voltage_mv();
+        // uint8_t pct = battery_get_percentage();
+        // display_battery_show(pct, mv);
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }

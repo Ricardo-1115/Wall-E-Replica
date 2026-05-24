@@ -1,17 +1,23 @@
 #include "wifi.h"
 #include <stdio.h>
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "nvs_flash.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 #include "esp_http_server.h"
-#include "cJSON.h"        
-#include <sys/param.h>    
-#include "DC_Motor.h"     
+#include "cJSON.h"
+#include <sys/param.h>
+#include "DC_Motor.h"
 #include "Servo_app.h"
+#include "energy_manager.h"
+#include "animation_engine.h"
+#include "battery.h"
+#include "esp_netif.h"
 #include "esp_camera.h"
+#include "esp_mac.h"
 
 
 #define WIFI_SSID CONFIG_WIFI_SSID
@@ -28,7 +34,10 @@ static esp_err_t stream_handle(httpd_req_t *req){
     esp_err_t res = ESP_OK;
     char part_buf[64];
 
-    // 1. 发送 HTTP 头， 告诉浏览器这是一个“混合替换”视频流，并设定边界线
+    static uint32_t s_fc = 0;
+    static int64_t s_t0 = 0;
+
+    // 1. 发送 HTTP 头， 告诉浏览器这是一个"混合替换"视频流，并设定边界线
     res = httpd_resp_set_type(req, "multipart/x-mixed-replace;boundary=123456789000000000000987654321");
     if(res != ESP_OK) return res;
 
@@ -36,10 +45,17 @@ static esp_err_t stream_handle(httpd_req_t *req){
     while(true){
         fb = esp_camera_fb_get();       // 从 DMA 抓取一帧图像
         if(!fb){
-            ESP_LOGE("CAM", "抓图失败");
+            ESP_LOGE("CAM", "cam frame err");
             res = ESP_FAIL;
         }
         else {
+            s_fc++;
+            // if (s_fc == 1) s_t0 = esp_timer_get_time();
+            // if (s_fc % 100 == 0) {
+            //     float fps = (float)s_fc * 1000000.0f / (float)(esp_timer_get_time() - s_t0);
+            //     ESP_LOGI("STREAM", "stream fps: %.1f FPS (%u fr)", fps, s_fc);
+            // }
+
             // 3. 发送单帧的数据头(包括大小和类型)
             size_t hlen = snprintf(part_buf, 64, "Content-Type: image/jpeg\r\nContent-Length:%u\r\n\r\n", fb->len);
             res = httpd_resp_send_chunk(req, part_buf, hlen);
@@ -102,6 +118,11 @@ static esp_err_t ws_handler(httpd_req_t *req) {
         // 第二次调用httpd_ws_recv_frame，实际接收数据到缓冲区
         ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
         if (ret == ESP_OK) {
+            // --- 收到用户操控指令，立即停止动画干扰 ---
+            anim_engine_stop();
+            anim_engine_enable_idle(false);
+            energy_manager_notify_activity();
+
             // --- 核心解析与入队逻辑 ---
             cJSON *root = cJSON_Parse((char *)ws_pkt.payload);
             if (root != NULL) {
@@ -162,10 +183,50 @@ static esp_err_t ws_handler(httpd_req_t *req) {
                 cJSON_Delete(root);  // 释放JSON对象内存，防止内存泄漏
             }
             // ------------------------
+
+            /* --- WebSocket 回声：原路返回（供延迟测试 RTT/2） --- */
+            httpd_ws_frame_t resp;
+            memset(&resp, 0, sizeof(resp));
+            resp.type = HTTPD_WS_TYPE_TEXT;
+            resp.payload = ws_pkt.payload;
+            resp.len = ws_pkt.len;
+            httpd_ws_send_frame(req, &resp);
         }
         free(buf);  // 释放缓冲区内存
     }
     return ESP_OK;  // 返回成功
+}
+
+/* --- /status JSON 端点：返回电量、energy、状态（供前端轮询） --- */
+static esp_err_t status_handler(httpd_req_t *req) {
+    uint8_t batt = battery_get_percentage();
+    uint8_t energy = energy_manager_get_value();
+    int zone = energy_manager_get_zone();
+    energy_state_t state = energy_manager_get_state();
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "battery", batt);
+    cJSON_AddNumberToObject(root, "energy", energy);
+    cJSON_AddNumberToObject(root, "zone", zone);
+    cJSON_AddBoolToObject(root, "engaged", (state == ENERGY_STATE_ENGAGED));
+
+    char *json = cJSON_PrintUnformatted(root);
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_send(req, json, strlen(json));
+    free(json);
+    cJSON_Delete(root);
+    return ESP_OK;
+}
+
+/* --- 主页：返回控制面板 HTML（由 cmake EMBED_FILES 嵌入固件） --- */
+extern const char index_html_start[] asm("_binary_index_html_start");
+extern const char index_html_end[]   asm("_binary_index_html_end");
+
+static esp_err_t root_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "text/html");
+    httpd_resp_send(req, index_html_start, index_html_end - index_html_start);
+    return ESP_OK;
 }
 
 // --- 启动服务器的函数 ---
@@ -189,6 +250,15 @@ void start_web_server()
 
     if (httpd_start(&server_ctrl, &config_ctrl) == ESP_OK)
     {
+        /* --- 主页 / --- */
+        static const httpd_uri_t root_uri = {
+            .uri = "/",
+            .method = HTTP_GET,
+            .handler = root_handler,
+            .user_ctx = NULL,
+        };
+        httpd_register_uri_handler(server_ctrl, &root_uri);
+
         static const httpd_uri_t ws_uri = {
             .uri = "/ws",
             .method = HTTP_GET,
@@ -197,7 +267,17 @@ void start_web_server()
             .is_websocket = true
         };
         httpd_register_uri_handler(server_ctrl, &ws_uri);
-        ESP_LOGI("WS", "WebSocket 控制服务器启动成功 -> ws://IP:80/ws");
+
+        /* --- 注册 /status 状态查询端点 --- */
+        static const httpd_uri_t status_uri = {
+            .uri = "/status",
+            .method = HTTP_GET,
+            .handler = status_handler,
+            .user_ctx = NULL,
+        };
+        httpd_register_uri_handler(server_ctrl, &status_uri);
+
+        ESP_LOGI("WS", "WebSocket 控制服务器启动成功");
     }
     else {
         ESP_LOGE("WS", "控制服务器启动失败！");
@@ -229,86 +309,90 @@ void start_web_server()
     }
 }
 
-void App_task(void *pvParameters)
+/* --- STA 事件处理 --- */
+static void wifi_event_handler(void *arg, esp_event_base_t event_base,
+                                int32_t event_id, void *event_data)
 {
-    while (1)
-    {
-        if (IP_GOT_BIT != (xEventGroupGetBits(wifi_event_group) & IP_GOT_BIT))
-        {
-            ESP_LOGI(TAG, "等待 WiFi 连接...");
+    if (event_base == WIFI_EVENT) {
+        switch (event_id) {
+        case WIFI_EVENT_STA_START:
+            ESP_LOGI(TAG, "WiFi 已启动，开始连接...");
+            break;
+        case WIFI_EVENT_STA_CONNECTED:
+            ESP_LOGI(TAG, "已连接到 AP");
+            break;
+        case WIFI_EVENT_STA_DISCONNECTED:
+            ESP_LOGI(TAG, "WiFi 断开，5 秒后重连...");
+            esp_wifi_connect();
+            break;
+        default:
+            break;
         }
-        xEventGroupWaitBits(wifi_event_group, IP_GOT_BIT, pdFALSE, pdTRUE, portMAX_DELAY); // 等待 WiFi 连接成功
-        start_web_server();                                                                // 连接成功后启动 WebSocket 服务器
-        vTaskDelete(NULL);                                                                // 删除当前任务
+    }
+    if (event_base == IP_EVENT) {
+        switch (event_id) {
+        case IP_EVENT_STA_GOT_IP: {
+            ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
+            ESP_LOGI(TAG, "获取到 IP: " IPSTR, IP2STR(&event->ip_info.ip));
+            xEventGroupSetBits(wifi_event_group, IP_GOT_BIT);
+            break;
+        }
+        default:
+            break;
+        }
     }
 }
 
-void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
+/* 等待 IP 后启动 Web 服务器的任务 */
+static void App_task(void *pvParameters)
 {
-    if (event_base == WIFI_EVENT)
-    {
-        switch (event_id)
-        {
-        case WIFI_EVENT_STA_START:
-            ESP_LOGI(TAG, "WiFi started");
-            break;
-        case WIFI_EVENT_STA_CONNECTED:
-            ESP_LOGI(TAG, "Connected to WiFi");
-            break;
-        case WIFI_EVENT_STA_DISCONNECTED:
-            ESP_LOGI(TAG, "Disconnected from WiFi");
-            esp_wifi_connect(); // 重新连接 WiFi
-            ESP_LOGI(TAG, "Attempting to reconnect to WiFi...");
-            break;
-        default:
-            break;
-        }
-    }
-    if (event_base == IP_EVENT)
-    {
-        switch (event_id)
-        {
-        case IP_EVENT_STA_GOT_IP:
-            ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
-            ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
-            xEventGroupSetBits(wifi_event_group, IP_GOT_BIT); // 设置连接成功的事件位
-            break;
-        default:
-            break;
-        }
-    }
+    xEventGroupWaitBits(wifi_event_group, IP_GOT_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
+    ESP_LOGI(TAG, "WiFi 连接成功，启动 Web 服务器...");
+    start_web_server();
+    vTaskDelete(NULL);
 }
 
 esp_err_t wifi_init(void)
 {
-    // 外部进行nvs_flash_init()，这里不重复初始化了
-
     ESP_LOGW(TAG, "1. 初始化阶段");
-    ESP_ERROR_CHECK(esp_netif_init());                                                    // 创建一个 LwIP 核心任务，并初始化 LwIP 相关工作
-    ESP_ERROR_CHECK(esp_event_loop_create_default());                                     // 创建一个默认事件循环
-    esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL);  // 注册一个事件处理程序来处理 WiFi 事件
-    esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL); // 注册一个事件处理程序来处理 IP 事件
-    esp_netif_create_default_wifi_sta();                                                  // 创建一个默认的 WIFI station 网络接口实例
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    esp_netif_create_default_wifi_sta();
+
+    /* DHCP 自动获取 IP */
+
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
+                                               &wifi_event_handler, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
+                                               &wifi_event_handler, NULL));
+
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));                        // 初始化 WIFI 驱动程序
-    wifi_event_group = xEventGroupCreate();                      // 创建一个事件组来管理 WiFi 连接状态
-    xTaskCreatePinnedToCore(App_task, "wifi_app_task", 4096, NULL, 5, NULL, 0); // 绑定 Core 0（网络协议核）
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    wifi_event_group = xEventGroupCreate();
 
     ESP_LOGW(TAG, "2. 配置阶段");
-    esp_wifi_set_mode(WIFI_MODE_STA); // 设置 WiFi 模式为 Station 模式
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+
     wifi_config_t wifi_config = {
         .sta = {
             .ssid = WIFI_SSID,
-            .password = WIFI_PASS},
+            .password = WIFI_PASS,
+        },
     };
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config)); // 设置 WIFI 配置
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
 
     ESP_LOGW(TAG, "3. 启动阶段");
-    ESP_ERROR_CHECK(esp_wifi_start()); // 启动 WIFI 驱动程序
+    ESP_ERROR_CHECK(esp_wifi_start());
     esp_wifi_set_ps(WIFI_PS_NONE);
 
+    /* 创建等待 IP 的后台任务 */
+    xTaskCreatePinnedToCore(App_task, "wifi_app_task", 4096, NULL, 5, NULL, 0);
+
     ESP_LOGW(TAG, "4. 连接阶段");
-    ESP_ERROR_CHECK(esp_wifi_connect()); // 连接到配置的 WiFi 网络
+    ESP_ERROR_CHECK(esp_wifi_connect());
+
+    ESP_LOGI(TAG, "正在连接到 WiFi '%s'...", WIFI_SSID);
 
     return ESP_OK;
 }

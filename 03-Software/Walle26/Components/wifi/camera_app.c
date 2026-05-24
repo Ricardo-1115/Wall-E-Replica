@@ -21,8 +21,9 @@
 #define CAM_PIN_PCLK       9
 
 void init_camera(void){
-    camera_config_t config;
+    camera_config_t config = { 0 };
     config.ledc_timer = LEDC_TIMER_1;
+    config.ledc_channel = LEDC_CHANNEL_2;   /* 不与 DC 电机使用的 CH0/CH1 冲突 */
     config.pin_d0 = CAM_PIN_Y2;
     config.pin_d1 = CAM_PIN_Y3;
     config.pin_d2 = CAM_PIN_Y4;

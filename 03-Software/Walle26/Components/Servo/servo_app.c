@@ -195,6 +195,10 @@ void walle_joint_move(uint8_t joint_id, float percentage, uint32_t duration_ms){
     float joint_angle_range = cfg.max_angle - cfg.min_angle;
     float joint_angle_target;
 
+    /* 百分比→角度映射：
+     *   reverse=true  (递增): 0%→min_angle, 100%→max_angle
+     *   reverse=false (递减): 0%→max_angle, 100%→min_angle
+     * "递减"表示百分比越高角度越小，对应舵机安装后方向与预期相反的情况。 */
     if(cfg.reverse == true){
         joint_angle_target = cfg.min_angle + percentage / 100.0f * joint_angle_range;
     }

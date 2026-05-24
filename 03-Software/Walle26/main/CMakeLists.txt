@@ -1,3 +1,3 @@
 idf_component_register(SRCS "main.c"
                     INCLUDE_DIRS "."
-                    REQUIRES "console" "command" "DC_Motor" "Servo" "nvs_flash" "wifi" "display" "battery" "fatfs")
+                    REQUIRES "console" "command" "DC_Motor" "Servo" "nvs_flash" "wifi" "DFPlayerMini" "display" "battery" "fatfs" "animation_engine" "energy_manager")

@@ -538,7 +538,7 @@ static void anim_engine_task(void *arg) {
             } else if (g_idle_enabled) {
                 /* 超时：播一段随机微表情 */
                 int idx = pick_weighted_idle();
-                ESP_LOGI(TAG, "idle → %s", s_idle_exprs[idx].name);
+                // ESP_LOGI(TAG, "idle → %s", s_idle_exprs[idx].name);
                 start_idle_anim(idx);
             }
         }
@@ -586,7 +586,7 @@ static void anim_engine_task(void *arg) {
                         g_state      = ANIM_STATE_IDLE;
                         g_current_id = -1;
                         g_current_anim = NULL;
-                        ESP_LOGI(TAG, "动画队列已空，回到空闲");
+                        // ESP_LOGI(TAG, "动画队列已空，回到空闲");
                     }
                 }
             }
@@ -642,7 +642,7 @@ esp_err_t anim_engine_play(int anim_id) {
         return ESP_ERR_TIMEOUT;
     }
 
-    ESP_LOGI(TAG, ">> PLAY [%d] %s", anim_id, s_anim_defs[anim_id].name);
+    // ESP_LOGI(TAG, ">> PLAY [%d] %s", anim_id, s_anim_defs[anim_id].name);
     return ESP_OK;
 }
 
@@ -664,10 +664,15 @@ esp_err_t anim_engine_enqueue(int anim_id) {
 }
 
 /* 立即停止所有动画
- *   无返回值，不检查队列满否——即使队列满，管家也快播完了 */
+ *   队列满时重试最多 3 次（间隔 5ms），因为 stop 必须生效以确保
+ *   WebSocket 用户指令不被动画帧覆盖 */
 void anim_engine_stop(void) {
     anim_engine_cmd_t cmd = { .type = ANIM_CMD_STOP, .anim_id = -1 };
-    xQueueSend(g_cmd_queue, &cmd, 0);
+    for (int i = 0; i < 3; i++) {
+        if (xQueueSend(g_cmd_queue, &cmd, 0) == pdTRUE) return;
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+    ESP_LOGW(TAG, "anim_engine_stop: 重试 3 次后仍无法投信（队列满）");
 }
 
 /* ----- 查询函数（直接读全局变量） ----- */
@@ -694,7 +699,7 @@ const anim_definition_t *anim_engine_get_def(int anim_id) {
 /* 开关空闲微表情 */
 void anim_engine_enable_idle(bool enable) {
     g_idle_enabled = enable;
-    ESP_LOGI(TAG, "空闲微表情 %s", enable ? "已开启" : "已关闭");
+    // ESP_LOGI(TAG, "空闲微表情 %s", enable ? "已开启" : "已关闭");
 }
 
 bool anim_engine_is_idle_enabled(void) {

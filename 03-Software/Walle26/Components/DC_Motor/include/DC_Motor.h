@@ -9,9 +9,8 @@
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/queue.h" 
+#include "freertos/queue.h"
 #include <sys/param.h>
-#include "cJSON.h"
 
 typedef struct {
     int8_t left_speed;

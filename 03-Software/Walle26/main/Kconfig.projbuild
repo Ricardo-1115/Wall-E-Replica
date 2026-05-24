@@ -260,12 +260,12 @@ menu "WiFi Configuration"
         string "WiFi SSID"
         default "myssid"
         help
-            SSID of the WiFi network WALL-E will connect to.
+            WALL-E 将要连接的 WiFi 网络名称。
 
     config WIFI_PASSWORD
         string "WiFi Password"
         default "mypassword"
         help
-            Password for the WiFi network.
+            WiFi 网络密码。
 
 endmenu

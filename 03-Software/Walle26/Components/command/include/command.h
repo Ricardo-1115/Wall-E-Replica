@@ -16,6 +16,7 @@ extern "C"
     void register_dfplayer_play_folder(void);
     void register_anim_debug(void);
     void register_anim_idle(void);
+    void register_motor_ripple_test(void);
 
 #ifdef __cplusplus
 }

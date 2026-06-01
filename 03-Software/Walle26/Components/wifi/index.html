@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>WALL-E · AXIOM 控制台</title>
+<style>
+:root{--bg:#080808;--panel:#141414;--border:#2a2a2a;--text:#ddd;--dim:#666;--cyan:#00e5ff;--amber:#ffbf00;--red:#ff4444;--green:#00e676;--font:'Courier New',monospace;--glow:0 0 8px rgba(0,229,255,.4)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh}
+.container{max-width:960px;margin:0 auto;padding:12px}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--panel);border:1px solid var(--border);border-radius:6px;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+.topbar h1{color:var(--cyan);font-size:clamp(.85rem,3vw,1.1rem);text-transform:uppercase;text-shadow:var(--glow);letter-spacing:1px}
+.topbar-right{display:flex;align-items:center;gap:16px}
+.battery{display:flex;align-items:center;gap:6px;font-size:.8rem}
+.battery .icon{position:relative;width:44px;height:20px;border:2px solid var(--dim);border-radius:3px;overflow:hidden}
+.battery .icon::after{content:'';position:absolute;right:-5px;top:4px;width:4px;height:10px;background:var(--dim);border-radius:0 2px 2px 0}
+.battery .fill{height:100%;border-radius:1px;transition:width .8s ease}
+.battery .pct{min-width:32px;text-align:right;font-weight:700}
+.batt-green{background:var(--green);box-shadow:0 0 6px var(--green)}
+.batt-amber{background:var(--amber);box-shadow:0 0 6px var(--amber)}
+.batt-red{background:var(--red);box-shadow:0 0 6px var(--red)}
+.mood{display:flex;align-items:center;gap:6px;font-size:.85rem}
+.mood .emoji{font-size:1.3rem;line-height:1}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+@media(max-width:640px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px 12px}
+.panel-title{color:var(--amber);font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:8px;display:flex;justify-content:space-between}
+.row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:.8rem}
+.label{color:var(--dim)}
+.value{color:var(--text);font-weight:700}
+.value.ok{color:var(--cyan)}
+.value.warn{color:var(--amber)}
+.value.err{color:var(--red);animation:blink 1s infinite}
+.servo-row{display:flex;align-items:center;gap:8px;padding:2px 0;font-size:.78rem}
+.servo-row .name{width:90px;flex-shrink:0;color:var(--dim)}
+.servo-bar{flex:1;height:8px;background:#222;border-radius:4px;overflow:hidden}
+.servo-bar .fill{height:100%;background:var(--cyan);box-shadow:0 0 4px var(--cyan);border-radius:4px;transition:width .05s linear}
+.servo-row .val{width:30px;text-align:right;font-size:.72rem;color:var(--text)}
+.ip-row{display:flex;gap:6px;margin-bottom:6px}
+.ip-row input{flex:1;background:#1a1a1a;color:var(--cyan);border:1px solid var(--border);padding:4px 8px;font-family:inherit;font-size:.8rem;border-radius:4px;outline:none}
+.ip-row input:focus{border-color:var(--cyan)}
+.ip-row button{background:#222;color:#fff;border:1px solid var(--border);padding:4px 12px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:.78rem;transition:.2s}
+.ip-row button:hover{border-color:var(--cyan);color:var(--cyan)}
+.camera-section{margin-bottom:10px}
+.cam-toggle{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-family:inherit;font-size:.8rem;color:var(--text);transition:.2s;width:100%}
+.cam-toggle:hover{border-color:var(--cyan);color:var(--cyan)}
+.cam-toggle.active{border-color:var(--cyan);color:var(--cyan);text-shadow:var(--glow)}
+.cam-feed-wrap{overflow:hidden;max-height:0;transition:max-height .4s ease;border-radius:0 0 6px 6px}
+.cam-feed-wrap.open{max-height:600px}
+.cam-feed-wrap img{width:100%;display:block;border:1px solid var(--border);border-top:0}
+.debug-box{background:#0c0c0c;border:1px dashed var(--border);border-radius:4px;padding:8px 10px;font-size:.78rem;color:var(--amber);word-break:break-all;min-height:28px;margin-top:6px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+.dot.ok{background:var(--green);box-shadow:0 0 4px var(--green)}
+.dot.warn{background:var(--amber);box-shadow:0 0 4px var(--amber)}
+.dot.err{background:var(--red);box-shadow:0 0 4px var(--red)}
+@keyframes blink{50%{opacity:.2}}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="topbar">
+  <h1>⬡ AXIOM UNIT · WALL-E</h1>
+  <div class="topbar-right">
+    <div class="battery">
+      <span class="icon"><div id="batt-fill" class="fill" style="width:0%"></div></span>
+      <span id="batt-pct" class="pct">--%</span>
+    </div>
+    <div class="mood">
+      <span id="mood-emoji" class="emoji">❓</span>
+      <span id="mood-text" style="font-size:.8rem">--</span>
+    </div>
+  </div>
+</div>
+<div class="grid">
+<div>
+  <div class="panel">
+    <div class="panel-title"><span>系统</span><span>SYS</span></div>
+    <div class="ip-row">
+      <input type="text" id="ws-ip" value="192.168.4.1" placeholder="ESP32 IP">
+      <button id="btn-connect">连接</button>
+    </div>
+    <div class="row"><span class="label">链路</span><span id="ws-stat" class="value err"><span class="dot err"></span>DISCONNECTED</span></div>
+    <div class="row"><span class="label">手柄</span><span id="gp-stat" class="value warn"><span class="dot warn"></span>NO GAMEPAD</span></div>
+    <div class="row"><span class="label">协议</span><span class="value ok">WebSocket</span></div>
+  </div>
+  <div class="panel" style="margin-top:10px">
+    <div class="panel-title"><span>动力</span><span>DRIVE</span></div>
+    <div class="row"><span class="label">左履带</span><span id="val-L" class="value">0</span></div>
+    <div class="row"><span class="label">右履带</span><span id="val-R" class="value">0</span></div>
+  </div>
+</div>
+<div>
+  <div class="panel">
+    <div class="panel-title"><span>关节</span><span>SERVO</span></div>
+    <div id="servo-list"></div>
+  </div>
+  <div class="panel" style="margin-top:10px">
+    <div class="panel-title"><span>表情</span><span>EXPR</span></div>
+    <div id="eye-display" style="text-align:center;padding:8px 0;font-size:1.1rem;color:var(--amber);text-shadow:0 0 6px var(--amber)">NORMAL 😐</div>
+  </div>
+</div>
+</div>
+<div class="camera-section">
+  <button class="cam-toggle" id="cam-btn">📷 启动图传</button>
+  <div class="cam-feed-wrap" id="cam-wrap">
+    <img id="cam-img" src="" alt="摄像头">
+  </div>
+</div>
+<div class="panel">
+  <div class="panel-title"><span>上行数据</span><span>TX</span></div>
+  <div class="debug-box" id="debug-tx">AWAITING DATA TX...</div>
+</div>
+</div>
+<script>
+const HEARTBEAT_MS = 50;
+const JOINTS = [
+  {id:0,name:'头部旋转'},{id:1,name:'脖顶'},{id:2,name:'脖底'},
+  {id:3,name:'左眼'},{id:4,name:'右眼'},{id:5,name:'左臂'},{id:6,name:'右臂'}
+];
+let ws,gamepadIdx=null,lastSend=0,reconnecting=false;
+let sv = JOINTS.map(()=>50); sv[3]=0; sv[4]=0; sv[5]=0; sv[6]=0;
+let dL=0,dR=0, camOn=false, camUrl='';
+const servoList = document.getElementById('servo-list');
+JOINTS.forEach(j=>{
+  const d=document.createElement('div'); d.className='servo-row';
+  d.innerHTML='<span class="name">'+j.name+'</span><div class="servo-bar"><div class="fill" id="sf-'+j.id+'" style="width:'+sv[j.id]+'%"></div></div><span class="val" id="sv-'+j.id+'">'+sv[j.id]+'</span>';
+  servoList.appendChild(d);
+});
+function updUI(){
+  document.getElementById('val-L').textContent=dL;
+  document.getElementById('val-R').textContent=dR;
+  JOINTS.forEach(j=>{
+    document.getElementById('sf-'+j.id).style.width=sv[j.id]+'%';
+    document.getElementById('sv-'+j.id).textContent=Math.round(sv[j.id]);
+  });
+}
+function moodFrom(z,e){
+  if(e) return {e:'🎮',t:'操控中'};
+  switch(z){case 0:return {e:'😊',t:'探索中'};case 1:return {e:'🤔',t:'好奇'};case 2:return {e:'😢',t:'低落'};case 3:return {e:'💤',t:'休眠'};default:return {e:'❓',t:'--'};}
+}
+async function pollStatus(){
+  try{
+    const ip=document.getElementById('ws-ip').value.trim(); if(!ip) return;
+    const r=await fetch('http://'+ip+'/status'); if(!r.ok) return;
+    const d=await r.json();
+    const pct=Math.min(100,Math.max(0,d.battery||0));
+    const el=document.getElementById('batt-fill');
+    el.style.width=pct+'%';
+    el.className='fill '+(pct>60?'batt-green':pct>20?'batt-amber':'batt-red');
+    document.getElementById('batt-pct').textContent=pct+'%';
+    const m=moodFrom(d.zone,d.engaged);
+    document.getElementById('mood-emoji').textContent=m.e;
+    document.getElementById('mood-text').textContent=m.t;
+  }catch(e){}
+}
+setInterval(pollStatus,2000);
+function wsConnect(){
+  const ip=document.getElementById('ws-ip').value.trim(); if(!ip) return;
+  if(ws){ws.onclose=null;ws.close()}
+  const st=document.getElementById('ws-stat');
+  st.innerHTML='<span class="dot warn"></span>CONNECTING...'; st.className='value warn';
+  ws=new WebSocket('ws://'+ip+'/ws');
+  ws.onopen=()=>{st.innerHTML='<span class="dot ok"></span>ONLINE';st.className='value ok';reconnecting=false;camUrl='http://'+ip+':8081/stream';};
+  ws.onclose=()=>{st.innerHTML='<span class="dot err"></span>DISCONNECTED';st.className='value err';if(!reconnecting){reconnecting=true;setTimeout(wsConnect,2000)}};
+  ws.onerror=()=>{};
+}
+document.getElementById('btn-connect').onclick=wsConnect;
+document.getElementById('ws-ip').onkeydown=e=>{if(e.key==='Enter')wsConnect()};
+document.getElementById('cam-btn').onclick=()=>{
+  camOn=!camOn; const b=document.getElementById('cam-btn'),w=document.getElementById('cam-wrap'),i=document.getElementById('cam-img');
+  if(camOn){b.textContent='🔴 关闭图传';b.classList.add('active');w.classList.add('open');if(camUrl)i.src=camUrl;}
+  else{b.textContent='📷 启动图传';b.classList.remove('active');w.classList.remove('open');i.src='';}
+};
+window.addEventListener('gamepadconnected',e=>{gamepadIdx=e.gamepad.index;const s=document.getElementById('gp-stat');s.innerHTML='<span class="dot ok"></span>READY';s.className='value ok';});
+window.addEventListener('gamepaddisconnected',()=>{gamepadIdx=null;const s=document.getElementById('gp-stat');s.innerHTML='<span class="dot warn"></span>NO GAMEPAD';s.className='value warn';});
+function axis(v){return Math.abs(v)<.1?0:Math.round((v-(v>0?.1:-.1))/.9*100)}
+const ARM_SPD=.8;
+function gpLoop(){
+  if(gamepadIdx!==null){
+    const gp=navigator.getGamepads()[gamepadIdx];
+    if(gp){
+      dL=axis(-gp.axes[1]); dR=axis(-gp.axes[3]);
+      [6,7].forEach((b,i)=>{const t=gp.buttons[b].value*100,t2=t<2?0:t;if(sv[5+i]<t2)sv[5+i]=Math.min(t2,sv[5+i]+ARM_SPD);else if(sv[5+i]>t2)sv[5+i]=Math.max(t2,sv[5+i]-ARM_SPD);});
+      if(gp.buttons[12].pressed){sv[1]=Math.min(100,sv[1]+1.5);sv[2]=Math.min(100,sv[2]+1.5)}
+      if(gp.buttons[13].pressed){sv[1]=Math.max(0,sv[1]-1.5);sv[2]=Math.max(0,sv[2]-1.5)}
+      if(gp.buttons[14].pressed) sv[0]=Math.max(0,sv[0]-1.5);
+      if(gp.buttons[15].pressed) sv[0]=Math.min(100,sv[0]+1.5);
+      const ed=document.getElementById('eye-display');
+      if(gp.buttons[0].pressed){sv[3]=0;sv[4]=0;ed.textContent='NORMAL 😐'}
+      else if(gp.buttons[1].pressed){sv[3]=20;sv[4]=80;ed.textContent='SAD 😢'}
+      else if(gp.buttons[3].pressed){sv[3]=80;sv[4]=20;ed.textContent='ANGRY 😠'}
+      else if(gp.buttons[2].pressed){sv[3]=30;sv[4]=30;ed.textContent='CURIOUS 🤔'}
+    }
+  }
+  updUI();
+  const now=Date.now();
+  const pld=JSON.stringify({L:dL,R:dR,S:sv.map(v=>Math.round(v*10)/10),D:HEARTBEAT_MS});
+  document.getElementById('debug-tx').textContent=pld;
+  if(ws&&ws.readyState===1&&now-lastSend>HEARTBEAT_MS){try{ws.send(pld)}catch(e){}lastSend=now;}
+  requestAnimationFrame(gpLoop);
+}
+gpLoop();
+if(location.protocol!=='file:'){document.getElementById('ws-ip').value=location.hostname;setTimeout(wsConnect,500)}
+</script>
+</body>
+</html>

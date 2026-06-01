@@ -167,10 +167,10 @@ static void init_i2c_devices(void)
         return;
     }
 
-    // if (init_oled_display() != ESP_OK) {
-    //     ESP_LOGE(TAG, "OLED 初始化失败");
-    //     // 继续运行，不影响其他功能
-    // }
+    if (init_oled_display() != ESP_OK) {
+        ESP_LOGE(TAG, "OLED 初始化失败");
+        // 继续运行，不影响其他功能
+    }
 
     if (init_servo_hardware() != ESP_OK) {
         ESP_LOGE(TAG, "舵机硬件初始化失败");
@@ -262,9 +262,9 @@ void app_main(void)
 
     // 主循环：每 2 秒刷新 OLED 显示电池电量
     while(1) {
-        // uint32_t mv = battery_get_voltage_mv();
-        // uint8_t pct = battery_get_percentage();
-        // display_battery_show(pct, mv);
+        uint32_t mv = battery_get_voltage_mv();
+        uint8_t pct = battery_get_percentage();
+        display_battery_show(pct, mv);
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }

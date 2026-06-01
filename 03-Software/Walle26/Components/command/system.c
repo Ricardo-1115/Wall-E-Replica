@@ -111,7 +111,7 @@ static int cmd_hello(int argc, char **argv){
     printf("[\e[0;32mON\e[0m] WiFi Control : Station Mode + WebSocket (port 80)\n");
     printf("[\e[0;32mON\e[0m] Camera Stream: HTTP MJPEG (port 8081)\n");
     printf("[\e[0;32mON\e[0m] Audio System : DFPlayerMini (UART)\n");
-    printf("[\e[0;33mOFF\e[0m] OLED Display : SSD1306 (Disabled)\n");
+    printf("[\e[0;32mON\e[0m] OLED Display : SSD1306 (Battery + Solar)\n");
 
     printf("------------------------------------------------\n");
     printf("\e[0;35m--- BnL LEGACY REPORT ---\e[0m\n");

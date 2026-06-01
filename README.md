@@ -22,7 +22,6 @@
 - [性能测试](#性能测试)
 - [当前进展与规划](#当前进展与规划)
 - [项目文件结构](#项目文件结构)
-- [快速开始](#快速开始)
 - [引用与致谢](#引用与致谢)
 
 ---
@@ -264,6 +263,8 @@
 <p align="center">
   <img src="./05-Assets/主控电路板布局布线图.png" width="70%" />
 </p>
+
+> 原理图：[02-Hardware/Main_Control_Board/SCH_WALL-E_MB_000_SCH_2026-06-01.pdf](./02-Hardware/Main_Control_Board/SCH_WALL-E_MB_000_SCH_2026-06-01.pdf)
 
 ---
 
@@ -566,7 +567,8 @@ WallE_Graduation/
 │   └── 01-WallE-Naming-Standard-v1.0.md  # 编码管理规范
 │
 ├── 02-Hardware/                    # 硬件设计
-│   └── Power_Distribution_Board/   # 电源分配板原理图 (PDF)
+│   ├── Power_Distribution_Board/   # 电源分配板原理图 (PDF)
+│   └── Main_Control_Board/        # 主控电路板原理图 (PDF)
 │
 ├── 03-Software/
 │   └── Walle26/                    # ESP-IDF 项目根目录
@@ -615,57 +617,6 @@ WallE_Graduation/
 │
 └── README.md                       # 本文件
 ```
-
----
-
-## 快速开始
-
-### 硬件需求
-
-| 部件 | 规格 |
-|------|------|
-| 主控芯片 | ESP32-S3 (ESP32-S3-WROOM-1 N16R8) |
-| 摄像头 | OV2640 (DVP 接口) |
-| 电机驱动 | TB6612 × 2 |
-| 舵机驱动 | PCA9685 (I²C) |
-| 舵机 | MG513 × 7 (头颈眼臂) |
-| 音频模块 | DFPlayer Mini (UART) |
-| 显示屏 | 1.3" OLED SSD1306 (I²C, 128×64) |
-| 电源 | 3S LiPo (11.1V) + 12V 三路电源分配板 |
-| 电池 | 3S LiPo 2200mAh |
-
-### 环境搭建
-
-```bash
-# 1. 安装 ESP-IDF (v5.5.4+)
-git clone -b v5.5.4 --recursive https://github.com/espressif/esp-idf.git
-cd esp-idf
-./install.sh
-source ./export.sh
-
-# 2. 克隆本项目
-git clone https://github.com/Ricardo-1115/Wall-E-Replica.git
-cd Wall-E-Replica/03-Software/Walle26
-
-# 3. 配置 WiFi (可选)
-idf.py menuconfig
-# → 在 Component config → Wi-Fi → 修改 SSID / Password
-#   默认 SoftAP: SSID=Wall-E, Password=Th5360778131@
-
-# 4. 编译 & 烧录
-idf.py build
-idf.py -p /dev/ttyACM0 flash monitor
-```
-
-### 使用方法
-
-1. **上电启动**：ESP32-S3 自动创建 WiFi 热点 `Wall-E`（或连接至预设 STA 网络）
-2. **打开控制面板**：浏览器访问 `http://192.168.4.1`（SoftAP 默认 IP）
-3. **查看图传**：点击"启动图传"按钮，或直接访问 `http://192.168.4.1:8081/stream`
-4. **游戏手柄**：连接 USB/蓝牙手柄后，页面自动识别
-5. **串口 CLI**：`idf.py monitor` 进入控制台，输入 `help` 查看命令
-
-> 图片: 双模式网络拓扑图 (`06-Thesis/ch2_system_architecture.drawio`)
 
 ---
 

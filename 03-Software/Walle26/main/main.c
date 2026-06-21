@@ -198,7 +198,7 @@ void app_main(void)
     battery_init();
     
     DFPlayerMini_Init();
-    DFPlayerMini_SetVolume(15);     /* 统一音量 */
+    DFPlayerMini_SetVolume(26);     /* 统一音量 */
     wifi_init();
     init_camera();
 

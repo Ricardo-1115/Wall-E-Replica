@@ -315,9 +315,43 @@ static void gen_arm_twitch(anim_keyframe_t *buf, int *count) {
     *count = 2;
 }
 
+/* 7. 环境音效 — 随机播放未使用的音效，不动关节
+ *   - 从文件夹 01 中选一个当前动画未使用的音效
+ *   - 所有关节填 -1（引擎会跳过），只发音效
+ *   - duration=1200ms 足够音效异步启动，不阻塞后续微表情 */
+/* 环境音效池：folder/file + 独立音量（0~30）
+ * 不同音效动态调整音量，避免刺耳或过轻 */
+static const struct { uint8_t folder, file, volume; } s_ambient_pool[] = {
+    {1, 2,  26},  /* Eve1Short */
+    {1, 4,  22},  /* AhhhUnderstanding — 人声 */
+    {1, 6,  24},  /* Doh */
+    {1, 8,  26},  /* Eve1Long */
+    {1, 9,  26},  /* Eve2Long */
+    {1, 10, 26},  /* Eve2Short */
+    {1, 11, 26},  /* Eve3Short */
+    {1, 12, 26},  /* Eve4Short */
+    {1, 14, 16},  /* HighWarningTones — 容易刺耳 */
+    {1, 20, 26},  /* PutonYourSundayClothes */
+    {1, 25, 20},  /* Whistle — 口哨 */
+    {1, 26, 26},  /* Yaooooh */
+};
+static void gen_ambient(anim_keyframe_t *buf, int *count) {
+    int pool_size = (int)(sizeof(s_ambient_pool) / sizeof(s_ambient_pool[0]));
+    int idx = rand_range(0, pool_size - 1);
+    /* 播前动态调整音量，确保不同音效听感一致 */
+    DFPlayerMini_SetVolume(s_ambient_pool[idx].volume);
+    buf[0] = (anim_keyframe_t){
+        s_ambient_pool[idx].folder,
+        s_ambient_pool[idx].file,
+        1200,
+        {-1, -1, -1, -1, -1, -1, -1}  /* 所有关节不动 */
+    };
+    *count = 1;
+}
+
 /* ---------- 加权随机选择表 ---------- */
 
-#define IDLE_EXPR_COUNT 7
+#define IDLE_EXPR_COUNT 8
 
 /* 每个微表情的"出现概率"由 weight 控制
  * 权重越大，被选中的概率越高
@@ -327,13 +361,14 @@ static const struct {
     idle_gen_t  generate;
     uint8_t     weight;
 } s_idle_exprs[IDLE_EXPR_COUNT] = {
-    { "BLINK",       gen_blink,       30 },  /* 30% — 最频繁 */
-    { "BLINK2",      gen_double_blink,12 },  /* 12% */
-    { "EYE_LEFT",    gen_eye_left,    12 },  /* 12% */
-    { "EYE_RIGHT",   gen_eye_right,   12 },  /* 12% */
-    { "HEAD_TILT",   gen_head_tilt,   20 },  /* 20% — 观赏性好 */
-    { "SCAN",        gen_scan,         8 },  /*  8% — 动作大，少些 */
-    { "ARM_TWITCH",  gen_arm_twitch,   6 },  /*  6% — 最不频繁 */
+    { "BLINK",       gen_blink,       20 },  /* 20% — 眨眼 */
+    { "BLINK2",      gen_double_blink,10 },  /* 10% — 连眨 */
+    { "EYE_LEFT",    gen_eye_left,    10 },  /* 10% — 眼睛扫左 */
+    { "EYE_RIGHT",   gen_eye_right,   10 },  /* 10% — 眼睛扫右 */
+    { "HEAD_TILT",   gen_head_tilt,   15 },  /* 15% — 歪头 */
+    { "SCAN",        gen_scan,         5 },  /*  5% — 全景扫视 */
+    { "ARM_TWITCH",  gen_arm_twitch,   5 },  /*  5% — 手臂微动 */
+    { "AMBIENT",     gen_ambient,     25 },  /* 25% — 环境音效 */
 };
 
 /* 加权随机选择算法：
@@ -342,11 +377,11 @@ static const struct {
  *   3. 累加权重，首次超过随机值的位置就是选中结果
  *
  * 视觉化：把总权重画成一条线段，每个表情占一段
- *   [眨眼  ][连眨 ][左][右][歪头    ][扫 ][手]
- *   0      30     42  54  66        86  94  100
+ *   [眨眼][连眨][左][右][歪头][扫][手][环境音效]
+ *   0    20   30  40  50    65  70  75  100
  *
  * 注意：每次调用都重新遍历求和 total，对于固定权重来说有微小浪费
- * （可以编译期求值或缓存）。但这里只有 7 个元素，影响忽略不计，
+ * （可以编译期求值或缓存）。但这里只有 8 个元素，影响忽略不计，
  * 保留遍历写法更清晰，且支持未来改成动态权重。 */
 static int pick_weighted_idle(void) {
     uint32_t total = 0;
@@ -394,8 +429,8 @@ static int                  g_queue_tail      = 0;
 
 /* 空闲微表情控制 */
 static bool                 g_idle_enabled    = true;          /* 默认开启 */
-static uint32_t             g_idle_base_ms    = 10000;        /* 基础间隔 10s */
-static uint32_t             g_idle_jitter_ms  = 15000;        /* 随机抖动 0~15s */
+static uint32_t             g_idle_base_ms    = 2000;         /* 基础间隔 2s */
+static uint32_t             g_idle_jitter_ms  = 2000;         /* 随机抖动 0~2s */
 
 /* ---------- 内部辅助函数 ---------- */
 
@@ -511,17 +546,19 @@ static void anim_engine_task(void *arg) {
     while (1) {
         /* ---------- 空闲态 ---------- */
         if (g_state == ANIM_STATE_IDLE) {
-            /* 默认：无限期等待（portMAX_DELAY = 永远等下去） */
-            uint32_t wait_ticks = portMAX_DELAY;
+            uint32_t wait_ticks;
 
-            /* 如果空闲微表情开启，等一段时间没命令就自己加戏
-             * 等待时间 = base + 随机 jitter，范围 10~25 秒
-             * 随机 jitter 的目的是让动作间隔不规律，更有"活物感" */
             if (g_idle_enabled) {
+                /* 空闲微表情开启：等一段时间没命令就自己加戏
+                 * 等待时间 = base + 随机 jitter */
                 uint32_t idle_wait_ms = g_idle_base_ms
                     + (esp_random() % (g_idle_jitter_ms + 1));
                 wait_ticks = pdMS_TO_TICKS(idle_wait_ms);
                 if (wait_ticks == 0) wait_ticks = 1;
+            } else {
+                /* 空闲禁用：有限超时（1s），定期醒来检查 g_idle_enabled
+                 * 避免 anim_engine_enable_idle(true) 后任务永久阻塞 */
+                wait_ticks = pdMS_TO_TICKS(1000);
             }
 
             /* 在信箱前等待：
@@ -538,7 +575,6 @@ static void anim_engine_task(void *arg) {
             } else if (g_idle_enabled) {
                 /* 超时：播一段随机微表情 */
                 int idx = pick_weighted_idle();
-                // ESP_LOGI(TAG, "idle → %s", s_idle_exprs[idx].name);
                 start_idle_anim(idx);
             }
         }
@@ -619,6 +655,7 @@ void anim_engine_init(void) {
     BaseType_t ret = xTaskCreatePinnedToCore(
         anim_engine_task, "anim_engine", 4096, NULL, 8, NULL, 1
     );
+
     if (ret != pdPASS) {
         ESP_LOGE(TAG, "引擎任务创建失败");
         return;
@@ -699,7 +736,6 @@ const anim_definition_t *anim_engine_get_def(int anim_id) {
 /* 开关空闲微表情 */
 void anim_engine_enable_idle(bool enable) {
     g_idle_enabled = enable;
-    // ESP_LOGI(TAG, "空闲微表情 %s", enable ? "已开启" : "已关闭");
 }
 
 bool anim_engine_is_idle_enabled(void) {
